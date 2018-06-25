@@ -1,0 +1,100 @@
+@import url(fonts/fonts.css);
+
+html,body {
+    margin: 0px;
+    padding: 0px;
+}
+
+html {
+    height: 100%;
+    min-height: 100%;
+}
+
+body {
+    height: 100%;
+    min-height: 100%;
+}
+
+body * {
+    box-sizing: border-box;
+    font-family: "Cutive Mono", monospace;
+    font-weight: bold;
+    background-color: #222;
+    color: #b8b8b8;
+    font-size: 22px;
+    text-rendering: auto;
+    letter-spacing: normal;
+    word-spacing: normal;
+}
+
+#app {
+  height: 100%;
+  padding: 0px;
+}
+
+#wrapper {
+    height: 100%;
+}
+
+#channel-info {
+  width: 200px;
+  float: left;
+  padding: 0.5em;
+  border-right: 1px solid #555;
+  height: 100%;
+}
+
+#message-area {
+  margin-left: 200px;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+#messages {
+  flex: 1;
+  padding: 0.25em 0.5em;
+}
+
+#channels {
+  width: 100%;
+}
+
+#channels .tab {
+  width: 10em;
+  display: inline-block;
+  border-bottom: 1px solid #555;
+  border-right: 1px solid #555;
+  padding: 0.25em 0.5em;;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+#channels .tab.selected {
+  background-color: #333;
+}
+
+#input {
+  width: 100%;
+}
+
+#input form {
+  width: 100%;
+  display: flex;
+  flex-direction: row;
+}
+
+input {
+  flex: 1;
+  border: none;
+  background-color: #333;
+  padding: 0.25em 0.5em;
+}
+
+button#send {
+  border: none;
+  background-color: #555;
+  padding: 0.25em 0.5em;
+  cursor: pointer;
+}
