@@ -85,11 +85,15 @@
         [:input {:value @buffer
                  :placeholder "..."
                  :on-change #(reset! buffer (-> % .-target .-value))}]
-        [:button {:type "submit" :id "send"} "send"]]])))
+        [:button {:type "submit" :id "send"} [:img.icon {:src "icons/comment.svg"}]]]])))
 
 (defn home-page []
   [:div#wrapper
-   [:div#channel-info "Channel info"]
+   [:div#channel-info
+    [:div#buttons
+     [:img.icon {:src "icons/bars.svg"}]
+     [:img.icon.left {:src "icons/cog.svg"}]]
+    "Users"]
    [:div#message-area
     [:div#channels
      [:span.tab "One"]

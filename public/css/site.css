@@ -27,6 +27,10 @@ body * {
     word-spacing: normal;
 }
 
+img.icon {
+  width: 32px;
+}
+
 #app {
   height: 100%;
   padding: 0px;
@@ -42,6 +46,14 @@ body * {
   padding: 0.5em;
   border-right: 1px solid #555;
   height: 100%;
+}
+
+#buttons {
+  text-align: right;
+}
+
+.left {
+  float: left;
 }
 
 #message-area {
@@ -94,7 +106,6 @@ input {
 
 button#send {
   border: none;
-  background-color: #555;
   padding: 0.25em 0.5em;
   cursor: pointer;
 }
