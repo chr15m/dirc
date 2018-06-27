@@ -8,6 +8,11 @@
 ;; -------------------------
 ;; Functions
 
+(if (aget js/localStorage "debug")
+  (defn debug [& args]
+    (apply js/console.log (clj->js args)))
+  (def debug identity))
+
 (defn to-hex [b]
   (.join (.map (js/Array.from (.slice b)) #(.slice (str "0" (.toString (bit-and % 0xff) 16)) -2)) ""))
 
