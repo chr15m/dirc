@@ -72,27 +72,80 @@
 (defn storage-save [k v]
   (.setItem storage k (-> v clj->js (js/JSON.stringify serializer))))
 
+;; Network
+
+(def BT-EXT "dc_channel")
+
+(defn receive-message [wire message]
+  (let [decoded-js (bencode/decode (.toString message))
+        decoded (js->clj decoded-js)]
+    (debug "message:" decoded)))
+
+(defn handle-handshake [wire addr handshake]
+  (debug "handle-handshake" (.. wire -peerId) addr handshake))
+
+(defn wire-fn [pk wire]
+  (set! (.. wire -extendedHandshake -pk) pk))
+
+(defn attach-extension-protocol [wire addr]
+  (let [t (partial wire-fn "PUBLIC KEY")]
+    (set! (.. t -prototype -name) BT-EXT)
+    (set! (.. t -prototype -onExtendedHandshake) (partial handle-handshake wire addr))
+    (set! (.. t -prototype -onMessage) (partial receive-message wire))
+    t))
+
+(defn detach-wire [wire]
+  (debug "closed" (.-peerId wire)))
+
+(defn attach-wire [wire addr]
+  (debug "saw wire" (.-peerId wire))
+  (.use wire (attach-extension-protocol wire addr))
+  (.on wire "close" (partial detach-wire wire)))
+
+(defn joined-channel [state torrent]
+  (debug "joined-channel" (.-infoHash torrent))
+  (swap! state assoc-in [:channels (.-infoHash torrent) :state] :connected))
+
+(defn join-channel [state buffer]
+  (debug "join-channel" buffer)
+  (let [channel-hash (to-hex (.slice (hash-object buffer) 0 20))
+        channel-file (js/File. [channel-hash] channel-hash)]
+    (debug "channel-hash" channel-hash)
+    (swap! state assoc-in [:channels channel-hash :state] :connecting)
+    (let [torrent (.seed (@state :wt) channel-file #js {:name channel-hash} (partial joined-channel state))]
+      (debug "torrent" torrent)
+      (.on torrent "infoHash" #(debug "channel-hash verify:" %))
+      (.on torrent "wire" (partial attach-wire)))))
+
+(defn send-message [state buffer]
+  (debug "send-message" buffer))
+
 ;; -------------------------
 ;; Event handlers
 
-(defn handle-submit [ev]
+(defn handle-submit [state buffer ev]
   (.preventDefault ev)
-  (js/console.log ev))
+  (let [tokens (.split @buffer " ")
+        first-word (first tokens)]
+    (cond (= first-word "/join") (join-channel state (second tokens))
+          :else (send-message state @buffer))
+    (reset! buffer "")))
 
 ;; -------------------------
 ;; Views
 
-(defn component-input-box []
+(defn component-input-box [state]
   (let [buffer (r/atom "")]
     (fn []
       [:div#input
-       [:form {:on-submit (partial handle-submit)}
-        [:input {:value @buffer
+       [:form {:on-submit (partial handle-submit state buffer)}
+        [:input {:auto-focus true
+                 :value @buffer
                  :placeholder "..."
                  :on-change #(reset! buffer (-> % .-target .-value))}]
         [:button {:type "submit" :id "send"} [:img.icon {:src "icons/comment.svg"}]]]])))
 
-(defn home-page []
+(defn home-page [state]
   [:div#wrapper
    [:div#channel-info
     [:div#buttons
@@ -105,7 +158,7 @@
      [:span.tab.selected "Two"]
      [:span.tab "Three"]]
     [:div#messages "Messages here"]
-    [component-input-box]]])
+    [component-input-box state]]])
 
 ;; -------------------------
 ;; Initialize app
