@@ -91,6 +91,10 @@ img.icon {
   background-color: #333;
 }
 
+#channels .tab .icon {
+  float: right;
+}
+
 #input {
   width: 100%;
 }

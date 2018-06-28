@@ -39,7 +39,7 @@
   (-> t
       (clj->js)
       (bencode/encode)
-      (js/Uint8Array.from)
+      (string-to-uint8array)
       (nacl.hash)))
 
 (defn make-keypair []
@@ -111,17 +111,17 @@
   (.use wire (attach-extension-protocol wire addr))
   (.on wire "close" (partial detach-wire wire)))
 
-(defn joined-channel [state torrent]
+(defn joined-channel [state channel-hash torrent]
   (debug "joined-channel" (.-infoHash torrent))
-  (swap! state assoc-in [:channels (.-infoHash torrent) :state] :connected))
+  (swap! state assoc-in [:channels channel-hash :state] :connected))
 
 (defn join-channel [state buffer]
   (debug "join-channel" buffer)
-  (let [channel-hash (to-hex (.slice (hash-object buffer) 0 20))
+  (let [channel-hash (to-hex (.slice (hash-object {:channel-name buffer}) 0 20))
         channel-file (js/File. [channel-hash] channel-hash)]
     (debug "channel-hash" channel-hash)
-    (swap! state assoc-in [:channels channel-hash :state] :connecting)
-    (let [torrent (.seed (@state :wt) channel-file #js {:name channel-hash} (partial joined-channel state))]
+    (let [torrent (.seed (@state :wt) channel-file #js {:name channel-hash} (partial joined-channel state channel-hash))]
+      (swap! state assoc-in [:channels channel-hash] {:state :connecting :name buffer})
       (debug "torrent" torrent)
       (.on torrent "infoHash" #(debug "channel-hash verify:" %))
       (.on torrent "wire" (partial attach-wire)))))
