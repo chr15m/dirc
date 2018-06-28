@@ -112,19 +112,35 @@
   (.on wire "close" (partial detach-wire wire)))
 
 (defn joined-channel [state channel-hash torrent]
-  (debug "joined-channel" (.-infoHash torrent))
-  (swap! state assoc-in [:channels channel-hash :state] :connected))
+  (let [info-hash (.-infoHash torrent)
+        chan-cursor (r/cursor state [:channels channel-hash])]
+    (debug "joined-channel" info-hash)
+    (swap! chan-cursor assoc :state :connected :info-hash info-hash)))
+
+(defn make-channel-blob [channel-hash]
+  (js/File. [channel-hash] channel-hash))
 
 (defn join-channel [state buffer]
   (debug "join-channel" buffer)
   (let [channel-hash (to-hex (.slice (hash-object {:channel-name buffer}) 0 20))
-        channel-file (js/File. [channel-hash] channel-hash)]
+        channel-blob (make-channel-blob channel-hash)]
     (debug "channel-hash" channel-hash)
-    (let [torrent (.seed (@state :wt) channel-file #js {:name channel-hash} (partial joined-channel state channel-hash))]
+    (let [torrent (.seed (@state :wt) channel-blob #js {:name channel-hash} (partial joined-channel state channel-hash))]
       (swap! state assoc-in [:channels channel-hash] {:state :connecting :name buffer})
       (debug "torrent" torrent)
       (.on torrent "infoHash" #(debug "channel-hash verify:" %))
       (.on torrent "wire" (partial attach-wire)))))
+
+(defn remove-channel [state channel-hash]
+  (swap! state update-in [:channels] dissoc channel-hash))
+
+(defn leave-channel [state channel-hash]
+  (let [info-hash (get-in @state [:channels channel-hash :info-hash])]
+    (if info-hash
+      (.remove (@state :wt) info-hash
+               (fn []
+                 (remove-channel state channel-hash)))
+      (remove-channel state channel-hash))))
 
 (defn send-message [state buffer]
   (debug "send-message" buffer))
@@ -169,7 +185,8 @@
     [:div#channels
      (for [[h c] (get @state :channels)]
        [:span.tab {:key (str h)}
-        [component-icon :times-circle]
+        [:span {:on-click (partial leave-channel state h)}
+         [component-icon :times-circle]]
         (c :name)])]
     [:div#messages "Messages here"]
     [component-input-box state]]])
