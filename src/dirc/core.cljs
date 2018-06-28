@@ -19,6 +19,13 @@
 (defn from-hex [b]
   (js/Uint8Array. (map #(js/parseInt (apply str %) 16) (partition 2 b))))
 
+(defonce utf8encoder (js/TextEncoder. "utf8"))
+
+(defn string-to-uint8array [s]
+  (if (= (type s) js/Uint8Array)
+    s
+    (.encode utf8encoder s)))
+
 (defn fingerprint [x]
   (-> x
       (to-hex)
