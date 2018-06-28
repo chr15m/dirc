@@ -134,6 +134,10 @@
 ;; -------------------------
 ;; Views
 
+(defn component-icon [n & [selected]]
+  [:img.icon {:src (str "icons/" (name n) ".svg")
+              :class (if selected "selected" "")}])
+
 (defn component-input-box [state]
   (let [buffer (r/atom "")]
     (fn []
@@ -149,14 +153,15 @@
   [:div#wrapper
    [:div#channel-info
     [:div#buttons
-     [:img.icon {:src "icons/bars.svg"}]
-     [:img.icon.left {:src "icons/cog.svg"}]]
+     [component-icon :bars]
+     [component-icon :cog]]
     "Users"]
    [:div#message-area
     [:div#channels
-     [:span.tab "One"]
-     [:span.tab.selected "Two"]
-     [:span.tab "Three"]]
+     (for [[h c] (get @state :channels)]
+       [:span.tab {:key (str h)}
+        [component-icon :times-circle]
+        (c :name)])]
     [:div#messages "Messages here"]
     [component-input-box state]]])
 
