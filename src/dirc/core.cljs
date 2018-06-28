@@ -26,12 +26,14 @@
     s
     (.encode utf8encoder s)))
 
+;; Crypto
+
 (defn fingerprint [x]
   (-> x
+      (string-to-uint8array)
+      (nacl.hash)
       (to-hex)
       (.substring 0 8)))
-
-;; Crypto
 
 (defn hash-object [t]
   (-> t
