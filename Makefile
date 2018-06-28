@@ -1,4 +1,4 @@
-ICONS=bars cog comment
+ICONS=bars cog comment times-circle
 COLOR=\#b8b8b8
 
 all: public/fonts/fonts.css $(foreach i,$(ICONS),public/icons/$(i).svg)
