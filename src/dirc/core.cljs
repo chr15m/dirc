@@ -20,11 +20,20 @@
   (js/Uint8Array. (map #(js/parseInt (apply str %) 16) (partition 2 b))))
 
 (defonce utf8encoder (js/TextEncoder. "utf8"))
+(defonce utf8decoder (js/TextDecoder. "utf8"))
 
 (defn string-to-uint8array [s]
   (if (= (type s) js/Uint8Array)
     s
     (.encode utf8encoder s)))
+
+(defn uint8array-to-string [a]
+  (if (= (type a) js/String)
+    a
+    (.decode utf8decoder a)))
+
+(defn now []
+  (-> (js/Date.) (.getTime)))
 
 ;; Crypto
 
@@ -85,30 +94,39 @@
 
 (def BT-EXT "dc_channel")
 
-(defn receive-message [wire message]
-  (let [decoded-js (bencode/decode (.toString message))
-        decoded (js->clj decoded-js)]
-    (debug "message:" decoded)))
+(defn receive-message [state wire message]
+  (debug "receive-message")
+  (debug "receive-message wire" wire)
+  (debug "receive-message message" message)
+  (let [channel-hash (.. wire -extendedHandshake -channelhash)
+        public-key (.. wire -extendedHandshake -pk)
+        message-string (uint8array-to-string message)
+        decoded-js (bencode/decode message-string)
+        decoded (js->clj decoded-js)
+        decoded (assoc decoded :pk public-key)]
+    (print "receive-message decoded:" decoded)
+    (swap! state update-in [:channels channel-hash :messages] conj decoded)))
 
 (defn handle-handshake [wire addr handshake]
   (debug "handle-handshake" (.. wire -peerId) addr handshake))
 
-(defn wire-fn [pk wire]
-  (set! (.. wire -extendedHandshake -pk) pk))
+(defn wire-fn [pk channel-hash wire]
+  (set! (.. wire -extendedHandshake -pk) pk)
+  (set! (.. wire -extendedHandshake -channelhash) channel-hash))
 
-(defn attach-extension-protocol [wire addr]
-  (let [t (partial wire-fn "PUBLIC KEY")]
+(defn attach-extension-protocol [state channel-hash wire addr]
+  (let [t (partial wire-fn "PUBLIC KEY" channel-hash)]
     (set! (.. t -prototype -name) BT-EXT)
     (set! (.. t -prototype -onExtendedHandshake) (partial handle-handshake wire addr))
-    (set! (.. t -prototype -onMessage) (partial receive-message wire))
+    (set! (.. t -prototype -onMessage) (partial receive-message state wire))
     t))
 
 (defn detach-wire [wire]
   (debug "closed" (.-peerId wire)))
 
-(defn attach-wire [wire addr]
+(defn attach-wire [state channel-hash wire addr]
   (debug "saw wire" (.-peerId wire))
-  (.use wire (attach-extension-protocol wire addr))
+  (.use wire (attach-extension-protocol state channel-hash wire addr))
   (.on wire "close" (partial detach-wire wire)))
 
 (defn joined-channel [state channel-hash torrent]
@@ -127,9 +145,9 @@
     (debug "channel-hash" channel-hash)
     (let [torrent (.seed (@state :wt) channel-blob #js {:name channel-hash} (partial joined-channel state channel-hash))]
       (swap! state assoc-in [:channels channel-hash] {:state :connecting :name buffer})
-      (debug "torrent" torrent)
+      (debug "channel torrent" torrent)
       (.on torrent "infoHash" #(debug "channel-hash verify:" %))
-      (.on torrent "wire" (partial attach-wire)))))
+      (.on torrent "wire" (partial attach-wire state channel-hash)))))
 
 (defn remove-channel [state channel-hash]
   (swap! state update-in [:channels] dissoc channel-hash))
@@ -143,7 +161,19 @@
       (remove-channel state channel-hash))))
 
 (defn send-message [state buffer]
-  (debug "send-message" buffer))
+  (let [payload {:message buffer
+                 :timestamp (now)}
+        payload (clj->js payload)]
+    (debug (aget (@state :wt) "torrents"))
+    (doall
+      (for [t (aget (@state :wt) "torrents")]
+        (do
+          (debug "torrent" t)
+          (doseq [w (.-wires t)]
+            (do
+              (debug "wire" w)
+              (.extended w BT-EXT payload))))))
+    (debug "send-message" payload)))
 
 ;; -------------------------
 ;; Event handlers
@@ -198,7 +228,11 @@
   (r/atom {:wt (WebTorrent.)}))
 
 (defn mount-root []
+  (debug "WebTorrent:" (@state :wt))
   (r/render [home-page state] (.getElementById js/document "app")))
 
 (defn init! []
+  (.on (@state :wt) "torrent"
+       (fn [torrent]
+         (debug "WebTorrent torrent:")))
   (mount-root))
