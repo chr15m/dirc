@@ -68,7 +68,7 @@
       pk)))
 
 (defn make-nonce []
-  (nacl.randomBytes 8))
+  (nacl.randomBytes 16))
 
 ;; Storage
 
@@ -103,7 +103,7 @@
         message-string (uint8array-to-string message)
         decoded-js (bencode/decode message-string)
         decoded (js->clj decoded-js)
-        decoded (assoc decoded :pk public-key)]
+        decoded (assoc decoded "pk" public-key)]
     (print "receive-message decoded:" decoded)
     (swap! state update-in [:channels channel-hash :messages] conj decoded)))
 
@@ -144,7 +144,8 @@
         channel-blob (make-channel-blob channel-hash)]
     (debug "channel-hash" channel-hash)
     (let [torrent (.seed (@state :wt) channel-blob #js {:name channel-hash} (partial joined-channel state channel-hash))]
-      (swap! state assoc-in [:channels channel-hash] {:state :connecting :name buffer})
+      (swap! state #(-> % (assoc-in [:channels channel-hash] {:state :connecting :name buffer})
+                        (assoc-in [:ui :selected] channel-hash)))
       (debug "channel torrent" torrent)
       (.on torrent "infoHash" #(debug "channel-hash verify:" %))
       (.on torrent "wire" (partial attach-wire state channel-hash)))))
@@ -162,7 +163,8 @@
 
 (defn send-message [state buffer]
   (let [payload {:message buffer
-                 :timestamp (now)}
+                 :timestamp (now)
+                 :nonce (to-hex (make-nonce))}
         payload (clj->js payload)]
     (debug (aget (@state :wt) "torrents"))
     (doall
@@ -175,6 +177,12 @@
               (.extended w BT-EXT payload))))))
     (debug "send-message" payload)))
 
+(defn get-selected-channel [state]
+  (get-in state [:ui :selected]))
+
+(defn is-selected-channel? [state channel-hash]
+  (= (get-selected-channel state) channel-hash))
+
 ;; -------------------------
 ;; Event handlers
 
@@ -185,6 +193,9 @@
     (cond (= first-word "/join") (join-channel state (second tokens))
           :else (send-message state @buffer))
     (reset! buffer "")))
+
+(defn select-channel [state channel-hash ev]
+  (swap! state assoc-in [:ui :selected] channel-hash))
 
 ;; -------------------------
 ;; Views
@@ -213,12 +224,21 @@
     "Users"]
    [:div#message-area
     [:div#channels
-     (for [[h c] (get @state :channels)]
-       [:span.tab {:key (str h)}
-        [:span {:on-click (partial leave-channel state h)}
-         [component-icon :times-circle]]
-        (c :name)])]
-    [:div#messages "Messages here"]
+     (doall (for [[h c] (get @state :channels)]
+              [:span.tab {:key (str h)
+                          :class (when (is-selected-channel? @state h) "selected")
+                          :on-click (partial select-channel state h)}
+               [:span {:on-click (partial leave-channel state h)}
+                [component-icon :times-circle]]
+               (when (= (c :state) :connecting)
+                 ".. ")
+               (c :name)]))]
+    [:div#messages
+     (doall (for [m (reverse (get-in @state [:channels (get-selected-channel @state) :messages]))]
+              [:div {:key (str (m "timestamp") (m "pk") (m "nonce"))}
+               [:span.time (m "timestamp")]
+               [:span.who (m "pk")]
+               [:span.message (m "message")]]))]
     [component-input-box state]]])
 
 ;; -------------------------
@@ -229,6 +249,7 @@
 
 (defn mount-root []
   (debug "WebTorrent:" (@state :wt))
+  (debug "State:" @state)
   (r/render [home-page state] (.getElementById js/document "app")))
 
 (defn init! []

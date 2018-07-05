@@ -95,6 +95,10 @@ img.icon {
   float: right;
 }
 
+#messages .time, .who, .message {
+  margin-right: 0.25em;
+}
+
 #input {
   width: 100%;
 }
