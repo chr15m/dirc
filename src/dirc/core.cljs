@@ -244,7 +244,7 @@
   (let [tokens (.split @buffer " ")
         first-word (first tokens)]
     (cond (= first-word "/join") (join-channel state (second tokens))
-          :else (send-message @state @buffer (get-selected-channel @state)))
+          (> (count @buffer) 0) (send-message @state @buffer (get-selected-channel @state)))
     (reset! buffer "")))
 
 (defn select-channel [state channel-hash ev]
