@@ -51,9 +51,6 @@
       (string-to-uint8array)
       (nacl.hash)))
 
-(defn make-keypair []
-  (nacl.sign.keyPair))
-
 (defn sign-datastructure [keypair datastructure]
   (nacl.sign.detached
     (hash-object datastructure)
@@ -67,8 +64,11 @@
       signature
       pk)))
 
-(defn make-nonce []
-  (nacl.randomBytes 16))
+(defn keypair-from-seed [seed]
+  (nacl.sign.keyPair.fromSeed seed))
+
+(defn random-bytes [length]
+  (nacl.randomBytes length))
 
 ;; Storage
 
@@ -81,7 +81,7 @@
 
 (defn deserializer [k v]
   (cond
-    (and (= (type v) js/String) (.substr v 0 2)) (from-hex (.substr v 2))
+    (and (= (type v) js/String) (= (.substr v 0 2) "0x")) (from-hex (.substr v 2))
     :else v))
 
 (defn storage-load [k]
@@ -89,6 +89,20 @@
 
 (defn storage-save [k v]
   (.setItem storage k (-> v clj->js (js/JSON.stringify serializer))))
+
+(defn create-account []
+  {:seed (random-bytes 32)
+   :handle "anonymous"})
+
+(defn load-account []
+  (let [account (storage-load "dirc")
+        account (if (not account)
+                  (create-account)
+                  account)]
+    account))
+
+(defn save-account [state]
+  (storage-save "dirc" (state :account)))
 
 ;; Network
 
@@ -245,15 +259,18 @@
 ;; Initialize app
 
 (defonce state
-  (r/atom {:wt (WebTorrent.)}))
+  (r/atom
+    {:wt (WebTorrent.)
+     :account (load-account)}))
 
 (defn mount-root []
   (debug "WebTorrent:" (@state :wt))
   (debug "State:" @state)
+  (save-account @state)
   (r/render [home-page state] (.getElementById js/document "app")))
 
 (defn init! []
   (.on (@state :wt) "torrent"
        (fn [torrent]
-         (debug "WebTorrent torrent:")))
+         (debug "WebTorrent torrent:" (.-infoHash torrent))))
   (mount-root))
