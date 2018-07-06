@@ -6,6 +6,12 @@
     [cljsjs.nacl-fast :as nacl]))
 
 ;; -------------------------
+;; Constants
+
+(defonce utf8encoder (js/TextEncoder. "utf8"))
+(defonce utf8decoder (js/TextDecoder. "utf8"))
+
+;; -------------------------
 ;; Functions
 
 (if (aget js/localStorage "debug")
@@ -19,9 +25,6 @@
 (defn from-hex [b]
   (js/Uint8Array. (map #(js/parseInt (apply str %) 16) (partition 2 b))))
 
-(defonce utf8encoder (js/TextEncoder. "utf8"))
-(defonce utf8decoder (js/TextDecoder. "utf8"))
-
 (defn string-to-uint8array [s]
   (if (= (type s) js/Uint8Array)
     s
@@ -34,6 +37,23 @@
 
 (defn now []
   (-> (js/Date.) (.getTime)))
+
+(defn zero-pad [x]
+  (.substr (str "00" x) -2))
+
+(defn get-date [t]
+  (let [d (js/Date. t)]
+    (str (.getFullYear d)
+         "-"
+         (zero-pad (.getMonth d))
+         "-"
+         (zero-pad (.getDay d)))))
+
+(defn get-time [t]
+  (let [d (js/Date. t)]
+    (str (zero-pad (.getHours d))
+         ":"
+         (zero-pad (.getMinutes d)))))
 
 ;; Crypto
 
@@ -267,7 +287,7 @@
     [:div#messages
      (doall (for [m (reverse (get-in @state [:channels (get-selected-channel @state) :messages]))]
               [:div {:key (str (m :t) (m :pk) (m :n))}
-               [:span.time (m :t)]
+               [:span.time {:title (get-date (m :t))} (get-time (m :t))]
                [:span.who (fingerprint (m :pk))]
                [:span.message (m :m)]]))]
     [component-input-box state]]])
