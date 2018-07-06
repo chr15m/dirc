@@ -164,7 +164,7 @@
 (defn send-message [state buffer]
   (let [payload {:message buffer
                  :timestamp (now)
-                 :nonce (to-hex (make-nonce))}
+                 :nonce (to-hex (random-bytes 16))}
         payload (clj->js payload)]
     (debug (aget (@state :wt) "torrents"))
     (doall
