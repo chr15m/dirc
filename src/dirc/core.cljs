@@ -176,13 +176,15 @@
     (set! (.. t -prototype -onMessage) (partial #'receive-message state wire))
     t))
 
-(defn detach-wire [wire]
-  (debug "closed" (.-peerId wire)))
+(defn detach-wire [state channel-hash wire]
+  (debug "closed" (.-peerId wire))
+  (swap! state update-in [:channels channel-hash :wires] dissoc (.-peerId wire)))
 
 (defn attach-wire [state channel-hash wire addr]
   (debug "saw wire" (.-peerId wire))
+  (swap! state assoc-in [:channels channel-hash :wires (.-peerId wire)] true)
   (.use wire (attach-extension-protocol state channel-hash wire addr))
-  (.on wire "close" (partial detach-wire wire)))
+  (.on wire "close" (partial detach-wire state channel-hash wire)))
 
 (defn joined-channel [state channel-hash torrent]
   (let [info-hash (.-infoHash torrent)
@@ -272,7 +274,8 @@
     [:div#buttons
      [component-icon :bars]
      [component-icon :cog]]
-    "Users"]
+    (apply + (map (fn [[channel-hash channel]] (-> channel :wires count)) (@state :channels)))
+    " wires"]
    [:div#message-area
     [:div#channels
      (doall (for [[h c] (get @state :channels)]
