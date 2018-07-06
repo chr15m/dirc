@@ -110,19 +110,35 @@
 
 (def BT-EXT "dc_channel")
 
+(defn get-channel-infohash [state channel-hash]
+  (get-in state [:channels channel-hash :info-hash]))
+
+(defn broadcast-message-to-channel [state channel-hash payload]
+  (let [wt (state :wt)
+        torrent (.get wt (get-channel-infohash state channel-hash))
+        wires (.-wires torrent)]
+    ; send to all wires
+    (debug "sending to" (.-length wires) "wires")
+    (doseq [w wires]
+      (.extended w BT-EXT payload))))
+
 (defn receive-message [state wire message]
   (debug "receive-message" wire message)
   (let [channel-hash (.. wire -extendedHandshake -channelhash)
         message-string (uint8array-to-string message)
         decoded-js (bencode/decode message-string)
-        decoded (js->clj decoded-js :keywordize-keys true)]
+        payload (js->clj decoded-js :keywordize-keys true)]
     (debug "channel-hash" channel-hash)
-    (print "receive-message decoded:" decoded)
-    (if (= channel-hash (decoded :c))
-      (if (check-datastructure-signature (from-hex (decoded :pk)) decoded)
-        (do
-          ; re-send if not received already
-          (swap! state update-in [:channels channel-hash :messages] conj decoded))
+    (print "receive-message payload:" payload)
+    (if (= channel-hash (payload :c))
+      (if (check-datastructure-signature (from-hex (payload :pk)) payload)
+        (swap! state (fn [old-state]
+                       (if (not (contains? (set (get-in old-state [:channels channel-hash :messages])) payload))
+                         (do
+                           ; re-send if not received already
+                           (broadcast-message-to-channel old-state channel-hash decoded-js)
+                           (update-in old-state [:channels channel-hash :messages] conj payload))
+                         old-state)))
         (debug "dropped message with bad signature:" decoded-js))
       (debug "dropped message with wrong channel-hash:" decoded-js))))
 
@@ -173,7 +189,7 @@
   (swap! state update-in [:channels] dissoc channel-hash))
 
 (defn leave-channel [state channel-hash]
-  (let [info-hash (get-in @state [:channels channel-hash :info-hash])]
+  (let [info-hash (get-channel-infohash @state channel-hash)]
     (if info-hash
       (.remove (@state :wt) info-hash
                (fn []
@@ -189,16 +205,8 @@
                  :pk (to-hex (aget keypair "publicKey"))}
         payload (sign-datastructure keypair payload)
         payload (clj->js payload)]
-    (debug (aget (state :wt) "torrents"))
-    (doall
-      (for [t (aget (state :wt) "torrents")]
-        (do
-          (debug "torrent" t)
-          (doseq [w (.-wires t)]
-            (do
-              (debug "wire" w)
-              (.extended w BT-EXT payload))))))
-    (debug "send-message" payload)))
+    (debug "send-message" payload)
+    (broadcast-message-to-channel state channel-hash payload)))
 
 (defn get-selected-channel [state]
   (get-in state [:ui :selected]))
