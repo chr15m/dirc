@@ -52,13 +52,15 @@
       (nacl.hash)))
 
 (defn sign-datastructure [keypair datastructure]
-  (nacl.sign.detached
-    (hash-object datastructure)
-    (aget keypair "secretKey")))
+  (assoc datastructure
+         :sig (to-hex
+                (nacl.sign.detached
+                  (hash-object datastructure)
+                  (aget keypair "secretKey")))))
 
 (defn check-datastructure-signature [pk datastructure]
-  (let [signature (datastructure :signature)
-        datastructure (dissoc datastructure :signature)]
+  (let [signature (from-hex (datastructure :sig))
+        datastructure (dissoc datastructure :sig)]
     (nacl.sign.detached.verify
       (hash-object datastructure)
       signature
@@ -109,30 +111,33 @@
 (def BT-EXT "dc_channel")
 
 (defn receive-message [state wire message]
-  (debug "receive-message")
-  (debug "receive-message wire" wire)
-  (debug "receive-message message" message)
+  (debug "receive-message" wire message)
   (let [channel-hash (.. wire -extendedHandshake -channelhash)
-        public-key (.. wire -extendedHandshake -pk)
         message-string (uint8array-to-string message)
         decoded-js (bencode/decode message-string)
-        decoded (js->clj decoded-js)
-        decoded (assoc decoded "pk" public-key)]
+        decoded (js->clj decoded-js :keywordize-keys true)]
+    (debug "channel-hash" channel-hash)
     (print "receive-message decoded:" decoded)
-    (swap! state update-in [:channels channel-hash :messages] conj decoded)))
+    (if (= channel-hash (decoded :c))
+      (if (check-datastructure-signature (from-hex (decoded :pk)) decoded)
+        (do
+          ; re-send if not received already
+          (swap! state update-in [:channels channel-hash :messages] conj decoded))
+        (debug "dropped message with bad signature:" decoded-js))
+      (debug "dropped message with wrong channel-hash:" decoded-js))))
 
 (defn handle-handshake [wire addr handshake]
-  (debug "handle-handshake" (.. wire -peerId) addr handshake))
+  (debug "handle-handshake" (.. wire -peerId) addr handshake)
+  (debug "extension:" (.. wire -extendedHandshake)))
 
-(defn wire-fn [pk channel-hash wire]
-  (set! (.. wire -extendedHandshake -pk) pk)
+(defn wire-fn [channel-hash wire]
   (set! (.. wire -extendedHandshake -channelhash) channel-hash))
 
 (defn attach-extension-protocol [state channel-hash wire addr]
-  (let [t (partial wire-fn "PUBLIC KEY" channel-hash)]
+  (let [t (partial wire-fn channel-hash)]
     (set! (.. t -prototype -name) BT-EXT)
-    (set! (.. t -prototype -onExtendedHandshake) (partial handle-handshake wire addr))
-    (set! (.. t -prototype -onMessage) (partial receive-message state wire))
+    (set! (.. t -prototype -onExtendedHandshake) (partial #'handle-handshake wire addr))
+    (set! (.. t -prototype -onMessage) (partial #'receive-message state wire))
     t))
 
 (defn detach-wire [wire]
@@ -161,7 +166,7 @@
       (swap! state #(-> % (assoc-in [:channels channel-hash] {:state :connecting :name buffer})
                         (assoc-in [:ui :selected] channel-hash)))
       (debug "channel torrent" torrent)
-      (.on torrent "infoHash" #(debug "channel-hash verify:" %))
+      (.on torrent "infoHash" #(debug "channel info-hash verify:" %))
       (.on torrent "wire" (partial attach-wire state channel-hash)))))
 
 (defn remove-channel [state channel-hash]
@@ -175,14 +180,18 @@
                  (remove-channel state channel-hash)))
       (remove-channel state channel-hash))))
 
-(defn send-message [state buffer]
-  (let [payload {:message buffer
-                 :timestamp (now)
-                 :nonce (to-hex (random-bytes 16))}
+(defn send-message [state buffer channel-hash]
+  (let [keypair (state :keypair)
+        payload {:m buffer
+                 :c channel-hash
+                 :t (now)
+                 :n (to-hex (random-bytes 16))
+                 :pk (to-hex (aget keypair "publicKey"))}
+        payload (sign-datastructure keypair payload)
         payload (clj->js payload)]
-    (debug (aget (@state :wt) "torrents"))
+    (debug (aget (state :wt) "torrents"))
     (doall
-      (for [t (aget (@state :wt) "torrents")]
+      (for [t (aget (state :wt) "torrents")]
         (do
           (debug "torrent" t)
           (doseq [w (.-wires t)]
@@ -205,7 +214,7 @@
   (let [tokens (.split @buffer " ")
         first-word (first tokens)]
     (cond (= first-word "/join") (join-channel state (second tokens))
-          :else (send-message state @buffer))
+          :else (send-message @state @buffer (get-selected-channel @state)))
     (reset! buffer "")))
 
 (defn select-channel [state channel-hash ev]
@@ -249,19 +258,21 @@
                (c :name)]))]
     [:div#messages
      (doall (for [m (reverse (get-in @state [:channels (get-selected-channel @state) :messages]))]
-              [:div {:key (str (m "timestamp") (m "pk") (m "nonce"))}
-               [:span.time (m "timestamp")]
-               [:span.who (m "pk")]
-               [:span.message (m "message")]]))]
+              [:div {:key (str (m :t) (m :pk) (m :n))}
+               [:span.time (m :t)]
+               [:span.who (fingerprint (m :pk))]
+               [:span.message (m :m)]]))]
     [component-input-box state]]])
 
 ;; -------------------------
 ;; Initialize app
 
 (defonce state
-  (r/atom
-    {:wt (WebTorrent.)
-     :account (load-account)}))
+  (let [account (load-account)]
+    (r/atom
+      {:wt (WebTorrent.)
+       :account account
+       :keypair (keypair-from-seed (account :seed))})))
 
 (defn mount-root []
   (debug "WebTorrent:" (@state :wt))
