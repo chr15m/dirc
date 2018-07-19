@@ -126,6 +126,12 @@
 (defn save-account [state]
   (storage-save "dirc" (state :account)))
 
+(defn add-log-message [state c message]
+  (swap! state update-in [:log] conj
+         {:m message
+          :c c
+          :t (now)}))
+
 ;; Network
 
 (def BT-EXT "dc_channel")
@@ -244,6 +250,7 @@
   (let [tokens (.split @buffer " ")
         first-word (first tokens)]
     (cond (= first-word "/join") (join-channel state (second tokens))
+          (= (first first-word) "/") (add-log-message state :error "No such command.")
           (> (count @buffer) 0) (send-message @state @buffer (get-selected-channel @state)))
     (reset! buffer "")))
 
@@ -278,21 +285,31 @@
     " wires"]
    [:div#message-area
     [:div#channels
+     [:span.tab {:key "log"
+                 :class (when (is-selected-channel? @state "log") "selected")
+                 :on-click (partial select-channel state "log")}
+      "log"]
      (doall (for [[h c] (get @state :channels)]
               [:span.tab {:key (str h)
                           :class (when (is-selected-channel? @state h) "selected")
                           :on-click (partial select-channel state h)}
+
                [:span {:on-click (partial leave-channel state h)}
                 [component-icon :times-circle]]
                (when (= (c :state) :connecting)
                  ".. ")
                (c :name)]))]
     [:div#messages
-     (doall (for [m (reverse (get-in @state [:channels (get-selected-channel @state) :messages]))]
-              [:div {:key (str (m :t) (m :pk) (m :n))}
-               [:span.time {:title (get-date (m :t))} (get-time (m :t))]
-               [:span.who (fingerprint (m :pk))]
-               [:span.message (m :m)]]))]
+     (if (is-selected-channel? @state "log")
+       (doall (for [m (reverse (get-in @state [:log]))]
+                [:div {:key (m :t) :class (m :c)}
+                 [:span.time {:title (get-date (m :t))} (get-time (m :t))]
+                 [:span.message (m :m)]]))
+       (doall (for [m (reverse (get-in @state [:channels (get-selected-channel @state) :messages]))]
+                [:div {:key (str (m :t) (m :pk) (m :n))}
+                 [:span.time {:title (get-date (m :t))} (get-time (m :t))]
+                 [:span.who (fingerprint (m :pk))]
+                 [:span.message (m :m)]])))]
     [component-input-box state]]])
 
 ;; -------------------------
@@ -303,7 +320,9 @@
     (r/atom
       {:wt (WebTorrent.)
        :account account
-       :keypair (keypair-from-seed (account :seed))})))
+       :keypair (keypair-from-seed (account :seed))
+       :ui {:selected "log"}
+       :log []})))
 
 (defn mount-root []
   (debug "WebTorrent:" (@state :wt))
