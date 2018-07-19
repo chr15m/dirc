@@ -118,6 +118,10 @@ img.icon {
   margin-right: 0.25em;
 }
 
+#messages .message {
+  margin-left: 0.5em;
+}
+
 #input {
   width: 100%;
 }

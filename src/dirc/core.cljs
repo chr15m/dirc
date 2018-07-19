@@ -126,12 +126,6 @@
 (defn save-account [state]
   (storage-save "dirc" (state :account)))
 
-(defn add-log-message [state c message]
-  (swap! state update-in [:log] conj
-         {:m message
-          :c c
-          :t (now)}))
-
 ;; Network
 
 (def BT-EXT "dc_channel")
@@ -211,7 +205,8 @@
                         (assoc-in [:ui :selected] channel-hash)))
       (debug "channel torrent" torrent)
       (.on torrent "infoHash" #(debug "channel info-hash verify:" %))
-      (.on torrent "wire" (partial attach-wire state channel-hash)))))
+      (.on torrent "wire" (partial attach-wire state channel-hash))
+      nil)))
 
 (defn remove-channel [state channel-hash]
   (swap! state update-in [:channels] dissoc channel-hash))
@@ -236,26 +231,37 @@
     (debug "send-message" payload)
     (broadcast-message-to-channel state channel-hash payload)))
 
+;; -------------------------
+;; UI Fns & Event handlers
+
+(defn select-channel [state channel-hash & [ev]]
+  (swap! state assoc-in [:ui :selected] channel-hash)
+  (.focus (js/document.getElementById "chatbox")))
+
+(defn add-log-message [state c & message-parts]
+  (swap! state update-in [:log] conj
+         {:m (apply str message-parts)
+          :c c
+          :t (now)})
+  (select-channel state "log"))
+
 (defn get-selected-channel [state]
   (get-in state [:ui :selected]))
 
 (defn is-selected-channel? [state channel-hash]
   (= (get-selected-channel state) channel-hash))
 
-;; -------------------------
-;; Event handlers
-
 (defn handle-submit [state buffer ev]
   (.preventDefault ev)
   (let [tokens (.split @buffer " ")
-        first-word (first tokens)]
-    (cond (= first-word "/join") (join-channel state (second tokens))
-          (= (first first-word) "/") (add-log-message state :error "No such command.")
-          (> (count @buffer) 0) (send-message @state @buffer (get-selected-channel @state)))
-    (reset! buffer "")))
-
-(defn select-channel [state channel-hash ev]
-  (swap! state assoc-in [:ui :selected] channel-hash))
+        first-word (first tokens)
+        action-taken (cond (= first-word "/join") (join-channel state (second tokens))
+                           (= (first first-word) "/") (add-log-message state :error "No such command: " @buffer)
+                           (and (> (count @buffer) 0)
+                                (not (is-selected-channel? @state "log"))) (send-message @state @buffer (get-selected-channel @state))
+                           :else true)]
+    (when-not action-taken
+      (reset! buffer ""))))
 
 ;; -------------------------
 ;; Views
@@ -269,7 +275,8 @@
     (fn []
       [:div#input
        [:form {:on-submit (partial handle-submit state buffer)}
-        [:input {:auto-focus true
+        [:input {:id "chatbox"
+                 :auto-focus true
                  :value @buffer
                  :placeholder "..."
                  :on-change #(reset! buffer (-> % .-target .-value))}]
@@ -322,7 +329,7 @@
        :account account
        :keypair (keypair-from-seed (account :seed))
        :ui {:selected "log"}
-       :log []})))
+       :log ()})))
 
 (defn mount-root []
   (debug "WebTorrent:" (@state :wt))
