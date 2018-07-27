@@ -11,6 +11,13 @@
 (defonce utf8encoder (js/TextEncoder. "utf8"))
 (defonce utf8decoder (js/TextDecoder. "utf8"))
 
+(def help-message
+"/help
+/join #CHANNEL-NAME = join a channel by name
+/nick handle = set your visible handle
+/key = print your hex encoded public key
+/seed [hex-encoded-seed] = get or set your keypair seed")
+
 ;; -------------------------
 ;; Functions
 
@@ -242,8 +249,7 @@
   (swap! state update-in [:log] conj
          {:m (apply str message-parts)
           :c c
-          :t (now)})
-  (select-channel state "log"))
+          :t (now)}))
 
 (defn get-selected-channel [state]
   (get-in state [:ui :selected]))
@@ -256,6 +262,7 @@
   (let [tokens (.split @buffer " ")
         first-word (first tokens)
         action-taken (cond (= first-word "/join") (join-channel state (second tokens))
+                           (= first-word "/help") (do (add-log-message state :info help-message) false)
                            (= (first first-word) "/") (add-log-message state :error "No such command: " @buffer)
                            (and (> (count @buffer) 0)
                                 (not (is-selected-channel? @state "log"))) (send-message @state @buffer (get-selected-channel @state))
@@ -311,12 +318,12 @@
        (doall (for [m (reverse (get-in @state [:log]))]
                 [:div {:key (m :t) :class (m :c)}
                  [:span.time {:title (get-date (m :t))} (get-time (m :t))]
-                 [:span.message (m :m)]]))
+                 [:pre.message (m :m)]]))
        (doall (for [m (reverse (get-in @state [:channels (get-selected-channel @state) :messages]))]
                 [:div {:key (str (m :t) (m :pk) (m :n))}
                  [:span.time {:title (get-date (m :t))} (get-time (m :t))]
                  [:span.who (fingerprint (m :pk))]
-                 [:span.message (m :m)]])))]
+                 [:pre.message (m :m)]])))]
     [component-input-box state]]])
 
 ;; -------------------------
@@ -335,6 +342,7 @@
   (debug "WebTorrent:" (@state :wt))
   (debug "State:" @state)
   (save-account @state)
+  (add-log-message state :info help-message)
   (r/render [home-page state] (.getElementById js/document "app")))
 
 (defn init! []

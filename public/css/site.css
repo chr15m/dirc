@@ -118,8 +118,14 @@ img.icon {
   margin-right: 0.25em;
 }
 
+#messages > div > * {
+  vertical-align: top;
+}
+
 #messages .message {
+  margin: 0px;
   margin-left: 0.5em;
+  display: inline-block;
 }
 
 #input {
