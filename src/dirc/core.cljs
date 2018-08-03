@@ -262,7 +262,7 @@
   (.preventDefault ev)
   (let [tokens (.split @buffer " ")
         first-word (first tokens)
-        action-taken (cond (= first-word "/join") (join-channel state (second tokens))
+        action-taken (cond (= first-word "/join") (if (= (first (second tokens)) "#") (join-channel state (second tokens)) (do (add-log-message state :error "Channel name must start with '#'.") false))
                            (= first-word "/help") (add-log-message state :info help-message)
                            (= (first first-word) "/") (do (add-log-message state :error "No such command: " @buffer) false)
                            (and (> (count @buffer) 0)
