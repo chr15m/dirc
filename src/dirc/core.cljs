@@ -121,7 +121,7 @@
 
 (defn create-account []
   {:seed (random-bytes 32)
-   :handle "anonymous"})
+   :profile {:handle "anonymous"}})
 
 (defn load-account []
   (let [account (storage-load "dirc")
@@ -131,7 +131,8 @@
     account))
 
 (defn save-account [state]
-  (storage-save "dirc" (state :account)))
+  (storage-save "dirc" {:seed (state :seed)
+                        :profile (state :profile)}))
 
 ;; Network
 
@@ -140,14 +141,14 @@
 (defn get-channel-infohash [state channel-hash]
   (get-in state [:channels channel-hash :info-hash]))
 
-(defn broadcast-message-to-channel [state channel-hash payload]
+(defn broadcast-message-to-channel [state channel-hash packet]
   (let [wt (state :wt)
         torrent (.get wt (get-channel-infohash state channel-hash))
         wires (.-wires torrent)]
     ; send to all wires
     (debug "sending to" (.-length wires) "wires")
     (doseq [w wires]
-      (.extended w BT-EXT payload))
+      (.extended w BT-EXT packet))
     state))
 
 (defn receive-message [state wire message]
@@ -161,12 +162,19 @@
     (if (= channel-hash (payload :c))
       (if (check-datastructure-signature (from-hex (payload :pk)) payload)
         (swap! state (fn [old-state]
-                       (if (not (contains? (set (get-in old-state [:channels channel-hash :messages])) payload))
-                         (do
-                           ; re-send if not received already
-                           (broadcast-message-to-channel old-state channel-hash decoded-js)
-                           (update-in old-state [:channels channel-hash :messages] conj payload))
-                         old-state)))
+                       ; TODO: check timestamp or send a sequence number to prevent replay attacks
+                       ; update this user's details
+                       (let [new-state (assoc-in old-state [:users (payload :pk)] (payload :u))
+                             ; update the last-seen time from this user
+                             new-state (assoc-in new-state [:users (payload :pk) :last] (payload :t))
+                             ; add the message if it is a message
+                             new-state (if (not (contains? (set (get-in new-state [:channels channel-hash :messages])) payload))
+                                         (do
+                                           ; re-send if not received already
+                                           (broadcast-message-to-channel new-state channel-hash decoded-js)
+                                           (update-in new-state [:channels channel-hash :messages] conj payload))
+                                         new-state)]
+                         new-state)))
         (debug "dropped message with bad signature:" decoded-js))
       (debug "dropped message with wrong channel-hash:" decoded-js))))
 
@@ -227,17 +235,33 @@
                  (remove-channel state channel-hash)))
       (remove-channel state channel-hash))))
 
+(defn make-packet [keypair profile channel-hash payload]
+  (let [packet {:c channel-hash
+                :t (now)
+                :n (to-hex (random-bytes 16))
+                :pk (to-hex (aget keypair "publicKey"))
+                :u profile}
+        packet (merge packet payload)
+        packet (sign-datastructure keypair packet)
+        packet (clj->js packet)]
+    packet))
+
 (defn send-message [state buffer channel-hash]
-  (let [keypair (state :keypair)
-        payload {:m buffer
-                 :c channel-hash
-                 :t (now)
-                 :n (to-hex (random-bytes 16))
-                 :pk (to-hex (aget keypair "publicKey"))}
-        payload (sign-datastructure keypair payload)
-        payload (clj->js payload)]
-    (debug "send-message" payload)
-    (broadcast-message-to-channel state channel-hash payload)))
+  (let [packet (make-packet (state :keypair) (state :profile) channel-hash {:m buffer})]
+    (debug "send-message" packet)
+    (broadcast-message-to-channel state channel-hash packet))
+  state)
+
+(defn send-ping [state]
+  (doseq [[channel-hash c] (@state :channels)]
+    (let [packet (make-packet (@state :keypair) (@state :profile) channel-hash {:p 1})]
+      (broadcast-message-to-channel @state channel-hash packet)))
+  @state)
+
+(defn update-nick [state nick]
+  (swap! state assoc-in [:profile :handle] nick)
+  (send-ping state)
+  @state)
 
 ;; -------------------------
 ;; UI Fns & Event handlers
@@ -264,6 +288,7 @@
         first-word (first tokens)
         action-taken (cond (= first-word "/join") (if (= (first (second tokens)) "#") (join-channel state (second tokens)) (do (add-log-message state :error "Channel name must start with '#'.") false))
                            (= first-word "/help") (add-log-message state :info help-message)
+                           (= first-word "/nick") (update-nick state (second tokens))
                            (= (first first-word) "/") (do (add-log-message state :error "No such command: " @buffer) false)
                            (and (> (count @buffer) 0)
                                 (not (is-selected-channel? @state "log"))) (send-message @state @buffer (get-selected-channel @state))
@@ -304,7 +329,7 @@
                  :class (when (is-selected-channel? @state "log") "selected")
                  :on-click (partial select-channel state "log")}
       "log"]
-     (doall (for [[h c] (get @state :channels)]
+     (doall (for [[h c] (@state :channels)]
               [:span.tab {:key (str h)
                           :class (when (is-selected-channel? @state h) "selected")
                           :on-click (partial select-channel state h)}
@@ -321,21 +346,25 @@
                  [:span.time {:title (get-date (m :t))} (get-time (m :t))]
                  [:pre.message (m :m)]]))
        (doall (for [m (reverse (get-in @state [:channels (get-selected-channel @state) :messages]))]
-                [:div {:key (str (m :t) (m :pk) (m :n))}
-                 [:span.time {:title (get-date (m :t))} (get-time (m :t))]
-                 [:span.who (fingerprint (m :pk))]
-                 [:pre.message (m :m)]])))]
+                (when (m :m)
+                  [:div {:key (str (m :t) (m :pk) (m :n))}
+                   [:span.time {:title (get-date (m :t))} (get-time (m :t))]
+                   [:span.who {:title (fingerprint (m :pk))} (or (get-in @state [:users (m :pk) :handle]) "?")]
+                   [:pre.message (m :m)]]))))]
     [component-input-box state]]])
 
 ;; -------------------------
 ;; Initialize app
 
 (defonce state
-  (let [account (load-account)]
+  (let [saved-state (load-account)
+        seed (saved-state :seed)]
     (r/atom
       {:wt (WebTorrent.)
-       :account account
-       :keypair (keypair-from-seed (account :seed))
+       :seed seed
+       :profile (saved-state :profile)
+       :keypair (keypair-from-seed seed)
+       :users {}
        :ui {:selected "log"}
        :log ()})))
 
@@ -350,4 +379,8 @@
   (.on (@state :wt) "torrent"
        (fn [torrent]
          (debug "WebTorrent torrent:" (.-infoHash torrent))))
+  ; periodically send out a ping to everyone
+  (js/setInterval
+    (partial #'send-ping state)
+    30000)
   (mount-root))
