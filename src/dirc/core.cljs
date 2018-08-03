@@ -147,7 +147,8 @@
     ; send to all wires
     (debug "sending to" (.-length wires) "wires")
     (doseq [w wires]
-      (.extended w BT-EXT payload))))
+      (.extended w BT-EXT payload))
+    state))
 
 (defn receive-message [state wire message]
   (debug "receive-message" wire message)
@@ -213,7 +214,7 @@
       (debug "channel torrent" torrent)
       (.on torrent "infoHash" #(debug "channel info-hash verify:" %))
       (.on torrent "wire" (partial attach-wire state channel-hash))
-      nil)))
+      @state)))
 
 (defn remove-channel [state channel-hash]
   (swap! state update-in [:channels] dissoc channel-hash))
@@ -262,12 +263,12 @@
   (let [tokens (.split @buffer " ")
         first-word (first tokens)
         action-taken (cond (= first-word "/join") (join-channel state (second tokens))
-                           (= first-word "/help") (do (add-log-message state :info help-message) false)
-                           (= (first first-word) "/") (add-log-message state :error "No such command: " @buffer)
+                           (= first-word "/help") (add-log-message state :info help-message)
+                           (= (first first-word) "/") (do (add-log-message state :error "No such command: " @buffer) false)
                            (and (> (count @buffer) 0)
                                 (not (is-selected-channel? @state "log"))) (send-message @state @buffer (get-selected-channel @state))
-                           :else true)]
-    (when-not action-taken
+                           :else false)]
+    (when action-taken
       (reset! buffer ""))))
 
 ;; -------------------------
