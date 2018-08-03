@@ -118,6 +118,15 @@ img.icon {
   margin-right: 0.25em;
 }
 
+#messages .who {
+  color: #666;
+  width: 5em;
+  display: inline-block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 #messages > div > * {
   vertical-align: top;
 }
