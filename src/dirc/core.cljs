@@ -289,6 +289,7 @@
         action-taken (cond (= first-word "/join") (if (= (first (second tokens)) "#") (join-channel state (second tokens)) (do (add-log-message state :error "Channel name must start with '#'.") false))
                            (= first-word "/help") (add-log-message state :info help-message)
                            (= first-word "/nick") (update-nick state (second tokens))
+                           (= first-word "/key") (add-log-message state :info (str "Your public key: " (to-hex (.-publicKey (@state :keypair)))))
                            (= (first first-word) "/") (do (add-log-message state :error "No such command: " @buffer) false)
                            (and (> (count @buffer) 0)
                                 (not (is-selected-channel? @state "log"))) (send-message @state @buffer (get-selected-channel @state))
