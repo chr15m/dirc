@@ -53,6 +53,9 @@
                          :install-deps true
                          :npm-deps {"bencode-js" "0.0.8"
                                     "webtorrent" "0.100.0"}
+                         :foreign-libs [{:file "node_modules/webtorrent/webtorrent.min.js"
+                                         :provides ["cljsjs.webtorrent"]
+                                         :global-exports {cljsjs.webtorrent WebTorrent}}]
                          :optimizations :advanced
                          :pretty-print false}}}}
 
