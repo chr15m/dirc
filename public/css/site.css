@@ -159,3 +159,12 @@ button#send {
   padding: 0.25em 0.5em;
   cursor: pointer;
 }
+
+#fin {
+  position: absolute;
+  top: 50%;
+  margin-top: -1em;
+  display: block;
+  width: 100%;
+  text-align: center;
+}

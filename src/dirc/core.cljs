@@ -16,6 +16,7 @@
 /join #CHANNEL-NAME = join a channel by name
 /nick handle = set your visible handle
 /key = print your hex encoded public key
+/logout = completely delete keys
 /seed [hex-encoded-seed] = get or set your keypair seed")
 
 ;; -------------------------
@@ -118,6 +119,9 @@
 
 (defn storage-save [k v]
   (.setItem storage k (-> v clj->js (js/JSON.stringify serializer))))
+
+(defn storage-remove [k]
+  (.removeItem storage k))
 
 (defn create-account []
   {:seed (random-bytes 32)
@@ -253,10 +257,11 @@
   state)
 
 (defn send-ping [state]
-  (doseq [[channel-hash c] (@state :channels)]
-    (let [packet (make-packet (@state :keypair) (@state :profile) channel-hash {:p 1})]
-      (broadcast-message-to-channel @state channel-hash packet)))
-  @state)
+  (when @state
+    (doseq [[channel-hash c] (@state :channels)]
+      (let [packet (make-packet (@state :keypair) (@state :profile) channel-hash {:p 1})]
+        (broadcast-message-to-channel @state channel-hash packet)))
+    @state))
 
 (defn update-nick [state nick]
   (swap! state assoc-in [:profile :handle] nick)
@@ -290,6 +295,7 @@
                            (= first-word "/help") (add-log-message state :info help-message)
                            (= first-word "/nick") (update-nick state (second tokens))
                            (= first-word "/key") (add-log-message state :info (str "Your public key: " (to-hex (.-publicKey (@state :keypair)))))
+                           (= first-word "/logout") (do (storage-remove "dirc") (reset! state nil))
                            (= (first first-word) "/") (do (add-log-message state :error "No such command: " @buffer) false)
                            (and (> (count @buffer) 0)
                                 (not (is-selected-channel? @state "log"))) (send-message @state @buffer (get-selected-channel @state))
@@ -317,42 +323,44 @@
         [:button {:type "submit" :id "send"} [:img.icon {:src "icons/comment.svg"}]]]])))
 
 (defn home-page [state]
-  [:div#wrapper
-   [:div#channel-info
-    [:div#buttons
-     [component-icon :bars]
-     [component-icon :cog]]
-    (apply + (map (fn [[channel-hash channel]] (-> channel :wires count)) (@state :channels)))
-    " wires"]
-   [:div#message-area
-    [:div#channels
-     [:span.tab {:key "log"
-                 :class (when (is-selected-channel? @state "log") "selected")
-                 :on-click (partial select-channel state "log")}
-      "log"]
-     (doall (for [[h c] (@state :channels)]
-              [:span.tab {:key (str h)
-                          :class (when (is-selected-channel? @state h) "selected")
-                          :on-click (partial select-channel state h)}
+  (if @state
+    [:div#wrapper
+     [:div#channel-info
+      [:div#buttons
+       [component-icon :bars]
+       [component-icon :cog]]
+      (apply + (map (fn [[channel-hash channel]] (-> channel :wires count)) (@state :channels)))
+      " wires"]
+     [:div#message-area
+      [:div#channels
+       [:span.tab {:key "log"
+                   :class (when (is-selected-channel? @state "log") "selected")
+                   :on-click (partial select-channel state "log")}
+        "log"]
+       (doall (for [[h c] (@state :channels)]
+                [:span.tab {:key (str h)
+                            :class (when (is-selected-channel? @state h) "selected")
+                            :on-click (partial select-channel state h)}
 
-               [:span {:on-click (partial leave-channel state h)}
-                [component-icon :times-circle]]
-               (when (= (c :state) :connecting)
-                 ".. ")
-               (c :name)]))]
-    [:div#messages
-     (if (is-selected-channel? @state "log")
-       (doall (for [m (reverse (get-in @state [:log]))]
-                [:div {:key (m :t) :class (m :c)}
-                 [:span.time {:title (get-date (m :t))} (get-time (m :t))]
-                 [:pre.message (m :m)]]))
-       (doall (for [m (reverse (get-in @state [:channels (get-selected-channel @state) :messages]))]
-                (when (m :m)
-                  [:div {:key (str (m :t) (m :pk) (m :n))}
+                 [:span {:on-click (partial leave-channel state h)}
+                  [component-icon :times-circle]]
+                 (when (= (c :state) :connecting)
+                   ".. ")
+                 (c :name)]))]
+      [:div#messages
+       (if (is-selected-channel? @state "log")
+         (doall (for [m (reverse (get-in @state [:log]))]
+                  [:div {:key (m :t) :class (m :c)}
                    [:span.time {:title (get-date (m :t))} (get-time (m :t))]
-                   [:span.who {:title (fingerprint (m :pk))} (or (get-in @state [:users (m :pk) :handle]) "?")]
-                   [:pre.message (m :m)]]))))]
-    [component-input-box state]]])
+                   [:pre.message (m :m)]]))
+         (doall (for [m (reverse (get-in @state [:channels (get-selected-channel @state) :messages]))]
+                  (when (m :m)
+                    [:div {:key (str (m :t) (m :pk) (m :n))}
+                     [:span.time {:title (get-date (m :t))} (get-time (m :t))]
+                     [:span.who {:title (fingerprint (m :pk))} (or (get-in @state [:users (m :pk) :handle]) "?")]
+                     [:pre.message (m :m)]]))))]
+      [component-input-box state]]]
+    [:div#fin "fin."]))
 
 ;; -------------------------
 ;; Initialize app
@@ -370,10 +378,11 @@
        :log ()})))
 
 (defn mount-root []
-  (debug "WebTorrent:" (@state :wt))
-  (debug "State:" @state)
-  (save-account @state)
-  (add-log-message state :info help-message)
+  (when @state
+    (debug "WebTorrent:" (@state :wt))
+    (debug "State:" @state)
+    (save-account @state)
+    (add-log-message state :info help-message))
   (r/render [home-page state] (.getElementById js/document "app")))
 
 (defn init! []
