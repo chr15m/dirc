@@ -1,0 +1,192 @@
+@import url(../fonts/fonts.css);
+
+* {
+  box-sizing: border-box;
+}
+
+html,body {
+  margin: 0px;
+  padding: 0px;
+  max-height: 100vh;
+  background-color: #222;
+}
+
+body * {
+  box-sizing: border-box;
+  font-family: "Cutive Mono", monospace;
+  font-weight: bold;
+  background-color: #222;
+  color: #b8b8b8;
+  font-size: 20px;
+  text-rendering: auto;
+  letter-spacing: normal;
+  word-spacing: normal;
+}
+
+img.icon {
+  width: 32px;
+  background-color: transparent;
+}
+
+#app {
+  padding: 0px;
+  width: 100%;
+  max-height: 100vh;
+}
+
+#loader {
+  position: absolute;
+  width: 64px;
+  height: 64px;
+  animation: spin 1s infinite linear;
+  top: 50%;
+  left: 50%;
+  margin-top: -32px;
+  margin-left: -32px;
+  display: block;
+}
+
+@keyframes spin {
+    from {transform:rotate(0deg);}
+    to {transform:rotate(360deg);}
+}
+
+#wrapper {
+  max-height: 100vh;
+}
+
+#channel-info {
+  position: fixed;
+  padding: 0.5em;
+  top: 0px;
+  right: 0px;
+  border: 1px solid #555;
+  background-color: #333;
+}
+
+#buttons {
+  text-align: right;
+  background-color: #333;
+}
+
+.left {
+  float: left;
+}
+
+#message-area {
+  display: flex;
+  flex-direction: column;
+}
+
+#messages {
+  flex: 1;
+  padding: 0em 0.5em;
+  margin: 2.5em 0em;
+  height: 100%;
+  overflow: auto;
+}
+
+#channels {
+  width: 100%;
+  position: fixed;
+  top: 0px;
+}
+
+#channels .tab {
+  width: 10em;
+  display: inline-block;
+  border-bottom: 1px solid #555;
+  border-right: 1px solid #555;
+  border-radius: 2px;
+  padding: 0.25em 0.5em;;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  line-height: 1.5em;
+}
+
+#channels .tab.selected {
+  background-color: #333;
+}
+
+#channels .tab .icon {
+  float: right;
+}
+
+#messages .time, .who, .message {
+  margin-right: 0.25em;
+}
+
+#messages .who {
+  color: #666;
+  width: 5em;
+  display: inline-block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#messages > div > * {
+  vertical-align: top;
+}
+
+#messages .message {
+  margin: 0px;
+  margin-left: 0.5em;
+  display: inline-block;
+}
+
+#input {
+  width: 100%;
+  position: fixed;
+  bottom: 0px;
+}
+
+#input form {
+  width: 100%;
+  display: flex;
+  flex-direction: row;
+}
+
+input {
+  flex: 1;
+  border: none;
+  background-color: #333;
+  padding: 0.25em 0.5em;
+}
+
+button#send {
+  border: none;
+  padding: 0.25em 0.5em;
+  cursor: pointer;
+}
+
+#fin {
+  position: absolute;
+  top: 50%;
+  margin-top: -1em;
+  display: block;
+  width: 100%;
+  text-align: center;
+}
+
+.waiting span {
+  animation: throb 1.4s infinite ease-in-out both;
+  display: inline-block;
+}
+
+.waiting .dot-1 {
+  animation-delay: -0.32s;
+}
+
+.waiting .dot-2 {
+  animation-delay: -0.16s;
+}
+
+@keyframes throb {
+  0%, 80%, 100% {
+    opacity: 1;
+  } 40% {
+    opacity: 0;
+  }
+}
