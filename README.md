@@ -3,7 +3,7 @@ Decentralized IRC-inspired self-hosted web chat.
 ### Self-hosted install
 
  1. Download a release.
- 2. Upload it to your web host.
+ 2. Upload it to your static web host.
 
 ### Limitations
 

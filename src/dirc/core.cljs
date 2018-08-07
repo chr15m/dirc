@@ -2,8 +2,10 @@
   (:require
     [reagent.core :as r]
     [cljsjs.webtorrent :as WebTorrent]
+    ;["webtorrent/webtorrent.min" :as WebTorrent]
     ["bencode-js/lib/index" :as bencode]
-    [cljsjs.nacl-fast :as nacl]))
+    [cljsjs.nacl-fast :as nacl]
+    [oops.core :refer [ocall! oset!]]))
 
 ;; -------------------------
 ;; Constants
@@ -36,12 +38,12 @@
 (defn string-to-uint8array [s]
   (if (= (type s) js/Uint8Array)
     s
-    (.encode utf8encoder s)))
+    (ocall! utf8encoder "encode" s)))
 
 (defn uint8array-to-string [a]
   (if (= (type a) js/String)
     a
-    (.decode utf8decoder a)))
+    (ocall! utf8decoder "decode" a)))
 
 (defn now []
   (-> (js/Date.) (.getTime)))
@@ -115,7 +117,7 @@
     :else v))
 
 (defn storage-load [k]
-  (-> storage (.getItem k) (js/JSON.parse deserializer) (js->clj :keywordize-keys true)))
+  (-> storage (.getItem k) (js/JSON.parse deserializer)))
 
 (defn storage-save [k v]
   (.setItem storage k (-> v clj->js (js/JSON.stringify serializer))))
@@ -127,11 +129,16 @@
   {:seed (random-bytes 32)
    :profile {:handle "anonymous"}})
 
+(defn extract-account [a]
+  {:seed (aget a "seed")
+   :profile (js->clj (aget a "profile") :keywordize-keys)})
+
 (defn load-account []
-  (let [account (storage-load "dirc")
-        account (if (not account)
-                  (create-account)
-                  account)]
+  (let [account-js (storage-load "dirc")
+        account (if account-js
+                  (extract-account account-js)
+                  (create-account))]
+    (js/console.log "account-js" account-js)
     account))
 
 (defn save-account [state]
@@ -147,17 +154,17 @@
 
 (defn broadcast-message-to-channel [state channel-hash packet]
   (let [wt (state :wt)
-        torrent (.get wt (get-channel-infohash state channel-hash))
-        wires (.-wires torrent)]
+        torrent (ocall! wt "get" (get-channel-infohash state channel-hash))
+        wires (aget torrent "wires")]
     ; send to all wires
-    (debug "sending to" (.-length wires) "wires")
+    (debug "sending to" (count wires) "wires")
     (doseq [w wires]
-      (.extended w BT-EXT packet))
+      (ocall! w "extended" BT-EXT packet))
     state))
 
 (defn receive-message [state wire message]
   (debug "receive-message" wire message)
-  (let [channel-hash (.. wire -extendedHandshake -channelhash)
+  (let [channel-hash (aget wire "extendedHandshake" "channelhash")
         message-string (uint8array-to-string message)
         decoded-js (bencode/decode message-string)
         payload (js->clj decoded-js :keywordize-keys true)]
@@ -183,31 +190,32 @@
       (debug "dropped message with wrong channel-hash:" decoded-js))))
 
 (defn handle-handshake [wire addr handshake]
-  (debug "handle-handshake" (.. wire -peerId) addr handshake)
-  (debug "extension:" (.. wire -extendedHandshake)))
+  (debug "handle-handshake" (aget wire "peerId") addr handshake)
+  (debug "extension:" (aget wire "extendedHandshake")))
 
 (defn wire-fn [channel-hash wire]
-  (set! (.. wire -extendedHandshake -channelhash) channel-hash))
+  (aset (aget wire "extendedHandshake") "channelhash" channel-hash))
 
 (defn attach-extension-protocol [state channel-hash wire addr]
   (let [t (partial wire-fn channel-hash)]
-    (set! (.. t -prototype -name) BT-EXT)
-    (set! (.. t -prototype -onExtendedHandshake) (partial #'handle-handshake wire addr))
-    (set! (.. t -prototype -onMessage) (partial #'receive-message state wire))
+    (aset (aget t "prototype") "name" BT-EXT)
+    (aset (aget t "prototype") "onExtendedHandshake" (partial #'handle-handshake wire addr))
+    (aset (aget t "prototype") "onMessage" (partial #'receive-message state wire))
+    (debug "extension:" t)
     t))
 
 (defn detach-wire [state channel-hash wire]
-  (debug "closed" (.-peerId wire))
-  (swap! state update-in [:channels channel-hash :wires] dissoc (.-peerId wire)))
+  (debug "closed" (aget wire "peerId"))
+  (swap! state update-in [:channels channel-hash :wires] dissoc (aget wire "peerId")))
 
 (defn attach-wire [state channel-hash wire addr]
-  (debug "saw wire" (.-peerId wire))
-  (swap! state assoc-in [:channels channel-hash :wires (.-peerId wire)] true)
-  (.use wire (attach-extension-protocol state channel-hash wire addr))
-  (.on wire "close" (partial detach-wire state channel-hash wire)))
+  (debug "saw wire" (aget wire "peerId"))
+  (swap! state assoc-in [:channels channel-hash :wires (aget wire "peerId")] true)
+  (ocall! wire "use" (attach-extension-protocol state channel-hash wire addr))
+  (ocall! wire "on" "close" (partial detach-wire state channel-hash wire)))
 
 (defn joined-channel [state channel-hash torrent]
-  (let [info-hash (.-infoHash torrent)
+  (let [info-hash (aget torrent "infoHash")
         chan-cursor (r/cursor state [:channels channel-hash])]
     (debug "joined-channel" info-hash)
     (swap! chan-cursor assoc :state :connected :info-hash info-hash)))
@@ -220,12 +228,12 @@
   (let [channel-hash (to-hex (.slice (hash-object {:channel-name buffer}) 0 20))
         channel-blob (make-channel-blob channel-hash)]
     (debug "channel-hash" channel-hash)
-    (let [torrent (.seed (@state :wt) channel-blob #js {:name channel-hash} (partial joined-channel state channel-hash))]
+    (let [torrent (ocall! (@state :wt) "seed" channel-blob #js {:name channel-hash} (partial joined-channel state channel-hash))]
       (swap! state #(-> % (assoc-in [:channels channel-hash] {:state :connecting :name buffer})
                         (assoc-in [:ui :selected] channel-hash)))
       (debug "channel torrent" torrent)
-      (.on torrent "infoHash" #(debug "channel info-hash verify:" %))
-      (.on torrent "wire" (partial attach-wire state channel-hash))
+      (ocall! torrent "on" "infoHash" #(debug "channel info-hash verify:" %))
+      (ocall! torrent "on" "wire" (partial attach-wire state channel-hash))
       @state)))
 
 (defn remove-channel [state channel-hash]
@@ -234,7 +242,7 @@
 (defn leave-channel [state channel-hash]
   (let [info-hash (get-channel-infohash @state channel-hash)]
     (if info-hash
-      (.remove (@state :wt) info-hash
+      (ocall! (@state :wt) "remove" info-hash
                (fn []
                  (remove-channel state channel-hash)))
       (remove-channel state channel-hash))))
@@ -294,7 +302,7 @@
         action-taken (cond (= first-word "/join") (if (= (first (second tokens)) "#") (join-channel state (second tokens)) (do (add-log-message state :error "Channel name must start with '#'.") false))
                            (= first-word "/help") (add-log-message state :info help-message)
                            (= first-word "/nick") (update-nick state (second tokens))
-                           (= first-word "/key") (add-log-message state :info (str "Your public key: " (to-hex (.-publicKey (@state :keypair)))))
+                           (= first-word "/key") (add-log-message state :info (str "Your public key: " (to-hex (aget (@state :keypair) "publicKey"))))
                            (= first-word "/logout") (do (storage-remove "dirc") (reset! state nil))
                            (= (first first-word) "/") (do (add-log-message state :error "No such command: " @buffer) false)
                            (and (> (count @buffer) 0)
@@ -305,8 +313,7 @@
 
 (defn check-and-scroll-to-bottom [element]
   (when element
-    (let [el (.-documentElement js/document)]
-      (print "el:" el)
+    (let [el (aget js/document "documentElement")]
       (let [is-stuck (<= (- (.-scrollHeight el) (.-clientHeight el)) (+ (.-scrollTop el) 1))]
         (if is-stuck
           ; hack to scroll to the bottom after update
@@ -402,9 +409,9 @@
   (r/render [home-page state] (.getElementById js/document "app")))
 
 (defn init! []
-  (.on (@state :wt) "torrent"
+  (ocall! (@state :wt) "on" "torrent"
        (fn [torrent]
-         (debug "WebTorrent torrent:" (.-infoHash torrent))))
+         (debug "WebTorrent torrent:" (aget torrent "infoHash"))))
   ; periodically send out a ping to everyone
   (js/setInterval
     (partial #'send-ping state)

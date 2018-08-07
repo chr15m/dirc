@@ -1,7 +1,7 @@
-ICONS=bars cog comment times-circle circle-o-notch
+ICONS=comment times-circle circle-o-notch
 COLOR=\#b8b8b8
 
-all: public/fonts/fonts.css $(foreach i,$(ICONS),public/icons/$(i).svg)
+fonts: public/fonts/fonts.css $(foreach i,$(ICONS),public/icons/$(i).svg)
 
 public/icons/%.svg:
 	./node_modules/.bin/font-awesome-svg-png --svg --color "$(COLOR)" --dest public/icons --icons $(basename $(notdir $@))
@@ -17,3 +17,21 @@ public/fonts/fonts.css: ./node_modules/.bin/goofoffline
 ./node_modules/.bin/font-awesome-svg-png:
 	npm install font-awesome-svg-png
 
+STATICFILES=$(shell find public/ -type f -o -type l | grep -v public/js)
+STATICDEST=$(foreach f,$(STATICFILES),$(subst public,build,$(f)))
+
+build: $(STATICDEST) build/js/app.js
+
+build/%: public/%
+	mkdir -p $(@D)
+	cp -avL $< $@
+
+build/js/app.js: src/**/** project.clj
+	lein clean
+	lein package
+
+.PHONY: clean
+
+clean:
+	lein clean
+	rm -rf build public/fonts

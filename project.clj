@@ -8,6 +8,7 @@
                  [org.clojure/clojurescript "1.10.312"]
                  [cljsjs/nacl-fast "1.0.0-rc.1-0"]
                  [mvxcvi/alphabase "0.2.2"]
+                 [binaryage/oops "0.6.2"]
                  [reagent "0.8.1"]]
 
   :plugins [[lein-cljsbuild "1.1.5"]
@@ -51,6 +52,8 @@
                          :output-dir "public/js/release"
                          :asset-path   "js/out"
                          :install-deps true
+                         ;:pseudo-names true
+                         ;:source-map "build/js/app.js.map"
                          :npm-deps {"bencode-js" "0.0.8"
                                     "webtorrent" "0.100.0"}
                          :foreign-libs [{:file "node_modules/webtorrent/webtorrent.min.js"

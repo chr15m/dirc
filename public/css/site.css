@@ -1,4 +1,4 @@
-@import url(fonts/fonts.css);
+@import url(../fonts/fonts.css);
 
 * {
   box-sizing: border-box;
@@ -8,6 +8,7 @@ html,body {
   margin: 0px;
   padding: 0px;
   max-height: 100vh;
+  background-color: #222;
 }
 
 body * {
