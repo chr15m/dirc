@@ -353,12 +353,14 @@
                   [:div {:key (m :t) :class (m :c)}
                    [:span.time {:title (get-date (m :t))} (get-time (m :t))]
                    [:pre.message (m :m)]]))
-         (doall (for [m (reverse (get-in @state [:channels (get-selected-channel @state) :messages]))]
-                  (when (m :m)
-                    [:div {:key (str (m :t) (m :pk) (m :n))}
-                     [:span.time {:title (get-date (m :t))} (get-time (m :t))]
-                     [:span.who {:title (fingerprint (m :pk))} (or (get-in @state [:users (m :pk) :handle]) "?")]
-                     [:pre.message (m :m)]]))))]
+         (if (> (-> (get-in @state [:channels (get-selected-channel @state)]) :wires count) 0)
+           (doall (for [m (reverse (get-in @state [:channels (get-selected-channel @state) :messages]))]
+                    (when (m :m)
+                      [:div {:key (str (m :t) (m :pk) (m :n))}
+                       [:span.time {:title (get-date (m :t))} (get-time (m :t))]
+                       [:span.who {:title (fingerprint (m :pk))} (or (get-in @state [:users (m :pk) :handle]) "?")]
+                       [:pre.message (m :m)]])))
+           [:div.waiting "Waiting for other participants" [:span.dot-1 "."] [:span.dot-2 "."] [:span.dot-3 "."]]))]
       [component-input-box state]]]
     [:div#fin "fin."]))
 

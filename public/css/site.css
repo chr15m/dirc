@@ -168,3 +168,24 @@ button#send {
   width: 100%;
   text-align: center;
 }
+
+.waiting span {
+  animation: throb 1.4s infinite ease-in-out both;
+  display: inline-block;
+}
+
+.waiting .dot-1 {
+  animation-delay: -0.32s;
+}
+
+.waiting .dot-2 {
+  animation-delay: -0.16s;
+}
+
+@keyframes throb {
+  0%, 80%, 100% {
+    opacity: 1;
+  } 40% {
+    opacity: 0;
+  }
+}
