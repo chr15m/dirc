@@ -1,30 +1,25 @@
 @import url(fonts/fonts.css);
 
+* {
+  box-sizing: border-box;
+}
+
 html,body {
-    margin: 0px;
-    padding: 0px;
-}
-
-html {
-    height: 100%;
-    min-height: 100%;
-}
-
-body {
-    height: 100%;
-    min-height: 100%;
+  margin: 0px;
+  padding: 0px;
+  max-height: 100vh;
 }
 
 body * {
-    box-sizing: border-box;
-    font-family: "Cutive Mono", monospace;
-    font-weight: bold;
-    background-color: #222;
-    color: #b8b8b8;
-    font-size: 20px;
-    text-rendering: auto;
-    letter-spacing: normal;
-    word-spacing: normal;
+  box-sizing: border-box;
+  font-family: "Cutive Mono", monospace;
+  font-weight: bold;
+  background-color: #222;
+  color: #b8b8b8;
+  font-size: 20px;
+  text-rendering: auto;
+  letter-spacing: normal;
+  word-spacing: normal;
 }
 
 img.icon {
@@ -33,9 +28,9 @@ img.icon {
 }
 
 #app {
-  height: 100%;
   padding: 0px;
   width: 100%;
+  max-height: 100vh;
 }
 
 #loader {
@@ -56,15 +51,15 @@ img.icon {
 }
 
 #wrapper {
-    height: 100%;
+  max-height: 100vh;
 }
 
 #channel-info {
-  width: 200px;
-  float: left;
+  position: fixed;
   padding: 0.5em;
-  border-right: 1px solid #555;
-  height: 100%;
+  top: 0px;
+  right: 0px;
+  border: 1px solid #555;
   background-color: #333;
 }
 
@@ -78,19 +73,22 @@ img.icon {
 }
 
 #message-area {
-  margin-left: 200px;
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
 }
 
 #messages {
   flex: 1;
-  padding: 0.25em 0.5em;
+  padding: 0em 0.5em;
+  margin: 2.5em 0em;
+  height: 100%;
+  overflow: auto;
 }
 
 #channels {
   width: 100%;
+  position: fixed;
+  top: 0px;
 }
 
 #channels .tab {
@@ -139,6 +137,8 @@ img.icon {
 
 #input {
   width: 100%;
+  position: fixed;
+  bottom: 0px;
 }
 
 #input form {

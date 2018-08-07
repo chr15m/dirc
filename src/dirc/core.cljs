@@ -303,6 +303,17 @@
     (when action-taken
       (reset! buffer ""))))
 
+(defn check-and-scroll-to-bottom [element]
+  (when element
+    (let [el (.-documentElement js/document)]
+      (print "el:" el)
+      (let [is-stuck (<= (- (.-scrollHeight el) (.-clientHeight el)) (+ (.-scrollTop el) 1))]
+        (if is-stuck
+          ; hack to scroll to the bottom after update
+          (js/setTimeout
+            #(aset el "scrollTop" (.-scrollHeight el))
+            1))))))
+
 ;; -------------------------
 ;; Views
 
@@ -322,13 +333,29 @@
                  :on-change #(reset! buffer (-> % .-target .-value))}]
         [:button {:type "submit" :id "send"} [:img.icon {:src "icons/comment.svg"}]]]])))
 
+(defn component-messages [state]
+  [(with-meta
+     (fn []
+       [:div#messages
+        (if (is-selected-channel? @state "log")
+          (doall (for [m (reverse (get-in @state [:log]))]
+                   [:div {:key (m :t) :class (m :c)}
+                    [:span.time {:title (get-date (m :t))} (get-time (m :t))]
+                    [:pre.message (m :m)]]))
+          (if (> (-> (get-in @state [:channels (get-selected-channel @state)]) :wires count) 0)
+            (doall (for [m (reverse (get-in @state [:channels (get-selected-channel @state) :messages]))]
+                     (when (m :m)
+                       [:div {:key (str (m :t) (m :pk) (m :n))}
+                        [:span.time {:title (get-date (m :t))} (get-time (m :t))]
+                        [:span.who {:title (fingerprint (m :pk))} (or (get-in @state [:users (m :pk) :handle]) "?")]
+                        [:pre.message (m :m)]])))
+            [:div.waiting "Waiting for other participants" [:span.dot-1 "."] [:span.dot-2 "."] [:span.dot-3 "."]]))])
+     {:component-will-update check-and-scroll-to-bottom})])
+
 (defn home-page [state]
   (if @state
     [:div#wrapper
      [:div#channel-info
-      [:div#buttons
-       [component-icon :bars]
-       [component-icon :cog]]
       (apply + (map (fn [[channel-hash channel]] (-> channel :wires count)) (@state :channels)))
       " wires"]
      [:div#message-area
@@ -347,20 +374,7 @@
                  (when (= (c :state) :connecting)
                    ".. ")
                  (c :name)]))]
-      [:div#messages
-       (if (is-selected-channel? @state "log")
-         (doall (for [m (reverse (get-in @state [:log]))]
-                  [:div {:key (m :t) :class (m :c)}
-                   [:span.time {:title (get-date (m :t))} (get-time (m :t))]
-                   [:pre.message (m :m)]]))
-         (if (> (-> (get-in @state [:channels (get-selected-channel @state)]) :wires count) 0)
-           (doall (for [m (reverse (get-in @state [:channels (get-selected-channel @state) :messages]))]
-                    (when (m :m)
-                      [:div {:key (str (m :t) (m :pk) (m :n))}
-                       [:span.time {:title (get-date (m :t))} (get-time (m :t))]
-                       [:span.who {:title (fingerprint (m :pk))} (or (get-in @state [:users (m :pk) :handle]) "?")]
-                       [:pre.message (m :m)]])))
-           [:div.waiting "Waiting for other participants" [:span.dot-1 "."] [:span.dot-2 "."] [:span.dot-3 "."]]))]
+      [component-messages state]
       [component-input-box state]]]
     [:div#fin "fin."]))
 
