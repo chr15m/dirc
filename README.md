@@ -1,4 +1,4 @@
-Decentralized IRC-inspired self-hosted web chat.
+peer-to-peer IRC-inspired self-hosted web chat.
 
 ### Self-hosted install
 
