@@ -392,7 +392,8 @@
   (let [saved-state (load-account)
         seed (saved-state :seed)]
     (r/atom
-      {:wt (WebTorrent.)
+      ; var client = new WebTorrent({ tracker: { rtcConfig: {}, wrtc: {} } })
+      {:wt (WebTorrent. (storage-load "dirc-wt-config"))
        :seed seed
        :profile (saved-state :profile)
        :keypair (keypair-from-seed seed)
