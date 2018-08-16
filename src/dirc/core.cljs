@@ -19,7 +19,10 @@
 /nick handle = set your visible handle
 /key = print your hex encoded public key
 /logout = completely delete keys
-/seed [hex-encoded-seed] = get or set your keypair seed")
+
+https://github.com/chr15m/dirc/#self-hosted-install")
+
+; /seed [hex-encoded-seed] = get or set your keypair seed
 
 ;; -------------------------
 ;; Functions
