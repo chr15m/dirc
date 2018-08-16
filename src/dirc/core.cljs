@@ -406,7 +406,10 @@
     (debug "WebTorrent:" (@state :wt))
     (debug "State:" @state)
     (save-account @state)
-    (add-log-message state :info help-message))
+    (add-log-message state :info help-message)
+    (let [url-hash (aget js/window "document" "location" "hash")]
+      (when (not= url-hash "")
+        (join-channel state url-hash))))
   (r/render [home-page state] (.getElementById js/document "app")))
 
 (defn init! []
