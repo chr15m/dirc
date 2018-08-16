@@ -20,7 +20,8 @@
 /key = print your hex encoded public key
 /logout = completely delete keys
 
-https://github.com/chr15m/dirc/#self-hosted-install")
+https://github.com/chr15m/dirc/#self-hosted-install
+Donate: 1dircYMXUhU7SrZWSdfxAgN83YiMFgVbH")
 
 ; /seed [hex-encoded-seed] = get or set your keypair seed
 
