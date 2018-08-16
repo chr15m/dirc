@@ -68,11 +68,15 @@
 ;; Crypto
 
 (defn fingerprint [x]
-  (-> x
-      (string-to-uint8array)
-      (nacl.hash)
-      (to-hex)
-      (.substring 0 8)))
+  (let [h (-> x
+              (string-to-uint8array)
+              (nacl.hash)
+              (to-hex)
+              (.substring 0 16))]
+    (->> h
+         (partition 4)
+         (map clojure.string/join)
+         (clojure.string/join " "))))
 
 (defn hash-object [t]
   (-> t
