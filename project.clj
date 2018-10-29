@@ -34,10 +34,14 @@
                          :output-to "public/js/app.js"
                          :output-dir "public/js/out"
                          :asset-path   "js/out"
-                         :install-deps false
+                         :install-deps true
                          :npm-deps {"bencode-js" "0.0.8"
-                                    "webtorrent" "0.100.0"}
-                         :foreign-libs [{:file "node_modules/webtorrent/webtorrent.min.js"
+                                    "webtorrent" "0.100.0"
+                                    "bugout" "0.0.6"}
+                         :foreign-libs [{:file "node_modules/bugout/docs/bugout.min.js"
+                                         :provides ["cljsjs.bugout"]
+                                         :global-exports {cljsjs.bugout Bugout}}
+                                        {:file "node_modules/webtorrent/webtorrent.min.js"
                                          :provides ["cljsjs.webtorrent"]
                                          :global-exports {cljsjs.webtorrent WebTorrent}}]
                          :source-map true

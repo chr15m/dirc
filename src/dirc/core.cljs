@@ -1,8 +1,8 @@
 (ns dirc.core
   (:require
     [reagent.core :as r]
+    [cljsjs.bugout :as Bugout]
     [cljsjs.webtorrent :as WebTorrent]
-    ;["webtorrent/webtorrent.min" :as WebTorrent]
     ["bencode-js/lib/index" :as bencode]
     [cljsjs.nacl-fast :as nacl]
     [oops.core :refer [ocall! oset!]]))
@@ -20,8 +20,7 @@
 /key = print your hex encoded public key
 /logout = completely delete keys
 
-https://github.com/chr15m/dirc/#self-hosted-install
-Donate: 1dircYMXUhU7SrZWSdfxAgN83YiMFgVbH")
+https://github.com/chr15m/dirc/#self-hosted-install")
 
 ; /seed [hex-encoded-seed] = get or set your keypair seed
 
@@ -70,17 +69,6 @@ Donate: 1dircYMXUhU7SrZWSdfxAgN83YiMFgVbH")
          (zero-pad (.getMinutes d)))))
 
 ;; Crypto
-
-(defn fingerprint [x]
-  (let [h (-> x
-              (string-to-uint8array)
-              (nacl.hash)
-              (to-hex)
-              (.substring 0 16))]
-    (->> h
-         (partition 4)
-         (map clojure.string/join)
-         (clojure.string/join " "))))
 
 (defn hash-object [t]
   (-> t
@@ -155,133 +143,67 @@ Donate: 1dircYMXUhU7SrZWSdfxAgN83YiMFgVbH")
 
 ;; Network
 
-(def BT-EXT "dc_channel")
+(defn get-channel-bugout [state channel-hash]
+  (-> state :channels (get channel-hash) :bugout))
 
-(defn get-channel-infohash [state channel-hash]
-  (get-in state [:channels channel-hash :info-hash]))
+(defn append-message [state channel-hash message]
+  (update-in state [:channels channel-hash :messages] conj message))
 
-(defn broadcast-message-to-channel [state channel-hash packet]
-  (let [wt (state :wt)
-        torrent (ocall! wt "get" (get-channel-infohash state channel-hash))
-        wires (aget torrent "wires")]
-    ; send to all wires
-    (debug "sending to" (count wires) "wires")
-    (doseq [w wires]
-      (ocall! w "extended" BT-EXT packet))
-    state))
+(defn network-event-receive-message [state channel-hash address message packet]
+  (debug "message" address message)
+  (let [m (js->clj message :keywordize-keys true)]
+    (case (m :k)
+      "message" (swap! state append-message channel-hash (merge m {:pk address :t (now)}))
+      "profile" (swap! state assoc-in [:users address] (m :p)))))
 
-(defn receive-message [state wire message]
-  (debug "receive-message" wire message)
-  (let [channel-hash (aget wire "extendedHandshake" "channelhash")
-        message-string (uint8array-to-string message)
-        decoded-js (bencode/decode message-string)
-        payload (js->clj decoded-js :keywordize-keys true)]
-    (debug "channel-hash" channel-hash)
-    (print "receive-message payload:" payload)
-    (if (= channel-hash (payload :c))
-      (if (check-datastructure-signature (from-hex (payload :pk)) payload)
-        (swap! state (fn [old-state]
-                       ; TODO: check timestamp or send a sequence number to prevent replay attacks
-                       ; update this user's details
-                       (let [new-state (assoc-in old-state [:users (payload :pk)] (payload :u))
-                             ; update the last-seen time from this user
-                             new-state (assoc-in new-state [:users (payload :pk) :last] (payload :t))
-                             ; add the message if it is a message
-                             new-state (if (not (contains? (set (get-in new-state [:channels channel-hash :messages])) payload))
-                                         (do
-                                           ; re-send if not received already
-                                           (broadcast-message-to-channel new-state channel-hash decoded-js)
-                                           (update-in new-state [:channels channel-hash :messages] conj payload))
-                                         new-state)]
-                         new-state)))
-        (debug "dropped message with bad signature:" decoded-js))
-      (debug "dropped message with wrong channel-hash:" decoded-js))))
+(defn network-event-user-state-update [state channel-hash op msg address]
+  (swap! state #(-> %
+                    (update-in [:channels channel-hash :users] op address)
+                    (append-message channel-hash {:m msg :n (to-hex (random-bytes 16)) :pk address :t (now)}))))
 
-(defn handle-handshake [wire addr handshake]
-  (debug "handle-handshake" (aget wire "peerId") addr handshake)
-  (debug "extension:" (aget wire "extendedHandshake")))
+(defn send-message [state channel-hash kind content]
+  (if (> (-> @state :channels (get channel-hash) :connections) 0)
+    (do
+      (.send (get-channel-bugout @state channel-hash)
+             (clj->js (merge {:k kind
+                              :n (to-hex (random-bytes 16))}
+                             content)))
+      state)))
 
-(defn wire-fn [channel-hash wire]
-  (aset (aget wire "extendedHandshake") "channelhash" channel-hash))
+(defn send-profile-update [state]
+  (doseq [[channel-hash channel] (@state :channels)]
+    (send-message state channel-hash :profile {:p (@state :profile)})))
 
-(defn attach-extension-protocol [state channel-hash wire addr]
-  (let [t (partial wire-fn channel-hash)]
-    (aset (aget t "prototype") "name" BT-EXT)
-    (aset (aget t "prototype") "onExtendedHandshake" (partial #'handle-handshake wire addr))
-    (aset (aget t "prototype") "onMessage" (partial #'receive-message state wire))
-    (debug "extension:" t)
-    t))
-
-(defn detach-wire [state channel-hash wire]
-  (debug "closed" (aget wire "peerId"))
-  (swap! state update-in [:channels channel-hash :wires] dissoc (aget wire "peerId")))
-
-(defn attach-wire [state channel-hash wire addr]
-  (debug "saw wire" (aget wire "peerId"))
-  (swap! state assoc-in [:channels channel-hash :wires (aget wire "peerId")] true)
-  (ocall! wire "use" (attach-extension-protocol state channel-hash wire addr))
-  (ocall! wire "on" "close" (partial detach-wire state channel-hash wire)))
-
-(defn joined-channel [state channel-hash torrent]
-  (let [info-hash (aget torrent "infoHash")
-        chan-cursor (r/cursor state [:channels channel-hash])]
-    (debug "joined-channel" info-hash)
-    (swap! chan-cursor assoc :state :connected :info-hash info-hash)))
-
-(defn make-channel-blob [channel-hash]
-  (js/File. [channel-hash] channel-hash))
-
-(defn join-channel [state buffer]
-  (debug "join-channel" buffer)
-  (let [channel-hash (to-hex (.slice (hash-object {:channel-name buffer}) 0 20))
-        channel-blob (make-channel-blob channel-hash)]
-    (debug "channel-hash" channel-hash)
-    (let [torrent (ocall! (@state :wt) "seed" channel-blob #js {:name channel-hash} (partial joined-channel state channel-hash))]
-      (swap! state #(-> % (assoc-in [:channels channel-hash] {:state :connecting :name buffer})
-                        (assoc-in [:ui :selected] channel-hash)))
-      (debug "channel torrent" torrent)
-      (ocall! torrent "on" "infoHash" #(debug "channel info-hash verify:" %))
-      (ocall! torrent "on" "wire" (partial attach-wire state channel-hash))
-      @state)))
-
-(defn remove-channel [state channel-hash]
-  (swap! state update-in [:channels] dissoc channel-hash))
+(defn join-channel [state channel-name]
+  (let [channel-hash (.substr (to-hex (hash-object {:channel channel-name})) 0 16)]
+    (when (not (get-in @state [:channels channel-hash]))
+      (let [bugout (Bugout. (str "dir-channel-" channel-name) #js {:wt (@state :wt) :seed (Bugout/encodeseed (@state :seed) :timeout 60000)})]
+        (debug "join-channel" channel-name channel-hash)
+        (swap! state #(-> % (assoc-in [:channels channel-hash] {:connections nil :name channel-name :bugout bugout :users #{}})
+                          (assoc-in [:ui :selected] channel-hash)))
+        ; hook up the Bugout events
+        (debug "bugout address" (.address bugout))
+        (.on bugout "seen" #((network-event-user-state-update state channel-hash conj "joined" %) (send-profile-update state)))
+        (.on bugout "left" (partial #'network-event-user-state-update state channel-hash disj "left"))
+        (.on bugout "message" (partial #'network-event-receive-message state channel-hash))
+        (.on bugout "connections" #(swap! state assoc-in [:channels channel-hash :connections] %))
+        (.heartbeat bugout)
+        @state))))
 
 (defn leave-channel [state channel-hash]
-  (let [info-hash (get-channel-infohash @state channel-hash)]
-    (if info-hash
-      (ocall! (@state :wt) "remove" info-hash
-               (fn []
-                 (remove-channel state channel-hash)))
-      (remove-channel state channel-hash))))
+  ; destroy the bugout instance
+  (.destroy (get-channel-bugout @state channel-hash) (partial debug "Bugout instance destroyed."))
+  (swap! state update-in [:channels] dissoc channel-hash))
 
-(defn make-packet [keypair profile channel-hash payload]
-  (let [packet {:c channel-hash
-                :t (now)
-                :n (to-hex (random-bytes 16))
-                :pk (to-hex (aget keypair "publicKey"))
-                :u profile}
-        packet (merge packet payload)
-        packet (sign-datastructure keypair packet)
-        packet (clj->js packet)]
-    packet))
-
-(defn send-message [state buffer channel-hash]
-  (let [packet (make-packet (state :keypair) (state :profile) channel-hash {:m buffer})]
-    (debug "send-message" packet)
-    (broadcast-message-to-channel state channel-hash packet))
-  state)
-
-(defn send-ping [state]
-  (when @state
-    (doseq [[channel-hash c] (@state :channels)]
-      (let [packet (make-packet (@state :keypair) (@state :profile) channel-hash {:p 1})]
-        (broadcast-message-to-channel @state channel-hash packet)))
-    @state))
+(defn add-log-message [state c & message-parts]
+  (swap! state update-in [:log] conj
+         {:m (apply str message-parts)
+          :c c
+          :t (now)}))
 
 (defn update-nick [state nick]
   (swap! state assoc-in [:profile :handle] nick)
-  (send-ping state)
+  (send-profile-update state)
   @state)
 
 ;; -------------------------
@@ -290,12 +212,6 @@ Donate: 1dircYMXUhU7SrZWSdfxAgN83YiMFgVbH")
 (defn select-channel [state channel-hash & [ev]]
   (swap! state assoc-in [:ui :selected] channel-hash)
   (.focus (js/document.getElementById "chatbox")))
-
-(defn add-log-message [state c & message-parts]
-  (swap! state update-in [:log] conj
-         {:m (apply str message-parts)
-          :c c
-          :t (now)}))
 
 (defn get-selected-channel [state]
   (get-in state [:ui :selected]))
@@ -314,7 +230,7 @@ Donate: 1dircYMXUhU7SrZWSdfxAgN83YiMFgVbH")
                            (= first-word "/logout") (do (storage-remove "dirc") (reset! state nil))
                            (= (first first-word) "/") (do (add-log-message state :error "No such command: " @buffer) false)
                            (and (> (count @buffer) 0)
-                                (not (is-selected-channel? @state "log"))) (send-message @state @buffer (get-selected-channel @state))
+                                (not (is-selected-channel? @state "log"))) (let [channel-hash (get-selected-channel @state)] (send-message state channel-hash :message {:m @buffer :c channel-hash}))
                            :else false)]
     (when action-taken
       (reset! buffer ""))))
@@ -357,12 +273,12 @@ Donate: 1dircYMXUhU7SrZWSdfxAgN83YiMFgVbH")
                    [:div {:key (m :t) :class (m :c)}
                     [:span.time {:title (get-date (m :t))} (get-time (m :t))]
                     [:pre.message (m :m)]]))
-          (if (> (-> (get-in @state [:channels (get-selected-channel @state)]) :wires count) 0)
+          (if (> (count (get-in @state [:channels (get-selected-channel @state) :users])) 0)
             (doall (for [m (reverse (get-in @state [:channels (get-selected-channel @state) :messages]))]
                      (when (m :m)
                        [:div {:key (str (m :t) (m :pk) (m :n))}
                         [:span.time {:title (get-date (m :t))} (get-time (m :t))]
-                        [:span.who {:title (fingerprint (m :pk))} (or (get-in @state [:users (m :pk) :handle]) "?")]
+                        [:span.who {:title (m :pk)} (or (get-in @state [:users (m :pk) :handle]) "?")]
                         [:pre.message (m :m)]])))
             [:div.waiting "Waiting for other participants" [:span.dot-1 "."] [:span.dot-2 "."] [:span.dot-3 "."]]))])
      {:component-will-update check-and-scroll-to-bottom})])
@@ -386,8 +302,10 @@ Donate: 1dircYMXUhU7SrZWSdfxAgN83YiMFgVbH")
 
                  [:span {:on-click (partial leave-channel state h)}
                   [component-icon :times-circle]]
-                 (when (= (c :state) :connecting)
-                   ".. ")
+                 (if (= (count (c :users)) 0)
+                   ".."
+                   (c :connections))
+                 " "
                  (c :name)]))]
       [component-messages state]
       [component-input-box state]]]
@@ -400,8 +318,8 @@ Donate: 1dircYMXUhU7SrZWSdfxAgN83YiMFgVbH")
   (let [saved-state (load-account)
         seed (saved-state :seed)]
     (r/atom
-      ; var client = new WebTorrent({ tracker: { rtcConfig: {}, wrtc: {} } })
       {:wt (WebTorrent. (storage-load "dirc-wt-config"))
+       :b []
        :seed seed
        :profile (saved-state :profile)
        :keypair (keypair-from-seed seed)
@@ -421,11 +339,5 @@ Donate: 1dircYMXUhU7SrZWSdfxAgN83YiMFgVbH")
   (r/render [home-page state] (.getElementById js/document "app")))
 
 (defn init! []
-  (ocall! (@state :wt) "on" "torrent"
-       (fn [torrent]
-         (debug "WebTorrent torrent:" (aget torrent "infoHash"))))
-  ; periodically send out a ping to everyone
-  (js/setInterval
-    (partial #'send-ping state)
-    30000)
+  (add-watch state :logger #(debug %4))
   (mount-root))
