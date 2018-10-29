@@ -1,0 +1,11 @@
+@font-face {
+    font-family: 'Cutive Mono';
+    font-style: normal;
+    font-weight: 400;
+    src: url(Cutive+Mono_400_normal.eot); /* {{embedded-opentype-gf-url}} */
+    src: local('☺'),
+        url(Cutive+Mono_400_normal.eot?#iefix) format('embedded-opentype'), /* {{embedded-opentype-gf-url}} */
+        url(Cutive+Mono_400_normal.woff) format('woff'), /* http://fonts.gstatic.com/s/cutivemono/v6/m8JWjfRfY7WVjVi2E-K9H6RCTmg.woff */
+        url(Cutive+Mono_400_normal.ttf) format('truetype'), /* http://fonts.gstatic.com/s/cutivemono/v6/m8JWjfRfY7WVjVi2E-K9H6RCTmuo39uc.ttf */
+        url(Cutive+Mono_400_normal.svg#Cutive+Mono_400_normal) format('svg'); /* http://fonts.gstatic.com/l/font?kit=m8JWjfRfY7WVjVi2E-K9H6RCTmk&skey=41a3d1bf4e17a723&v=v6#CutiveMono */
+}
