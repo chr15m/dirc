@@ -5,7 +5,7 @@
     [cljsjs.webtorrent :as WebTorrent]
     ["bencode-js/lib/index" :as bencode]
     [cljsjs.nacl-fast :as nacl]
-    [oops.core :refer [ocall! oset!]]))
+    [oops.core :refer [oget ocall! oset!]]))
 
 ;; -------------------------
 ;; Constants
@@ -177,17 +177,17 @@ https://github.com/chr15m/dirc/#self-hosted-install")
 (defn join-channel [state channel-name]
   (let [channel-hash (.substr (to-hex (hash-object {:channel channel-name})) 0 16)]
     (when (not (get-in @state [:channels channel-hash]))
-      (let [bugout (Bugout. (str "dir-channel-" channel-name) #js {:wt (@state :wt) :seed (Bugout/encodeseed (@state :seed) :timeout 60000)})]
+      (let [bugout (Bugout. (str "dir-channel-" channel-name) #js {:wt (@state :wt) :seed (ocall! Bugout "encodeseed" (@state :seed)) :timeout 60000})]
         (debug "join-channel" channel-name channel-hash)
         (swap! state #(-> % (assoc-in [:channels channel-hash] {:connections nil :name channel-name :bugout bugout :users #{}})
                           (assoc-in [:ui :selected] channel-hash)))
         ; hook up the Bugout events
         (debug "bugout address" (.address bugout))
-        (.on bugout "seen" #((network-event-user-state-update state channel-hash conj "joined" %) (send-profile-update state)))
-        (.on bugout "left" (partial #'network-event-user-state-update state channel-hash disj "left"))
-        (.on bugout "message" (partial #'network-event-receive-message state channel-hash))
-        (.on bugout "connections" #(swap! state assoc-in [:channels channel-hash :connections] %))
-        (.heartbeat bugout)
+        (ocall! bugout "on" "seen" #((network-event-user-state-update state channel-hash conj "joined" %) (send-profile-update state)))
+        (ocall! bugout "on" "left" (partial #'network-event-user-state-update state channel-hash disj "left"))
+        (ocall! bugout "on" "message" (partial #'network-event-receive-message state channel-hash))
+        (ocall! bugout "on" "connections" #(swap! state assoc-in [:channels channel-hash :connections] %))
+        (ocall! bugout "heartbeat")
         @state))))
 
 (defn leave-channel [state channel-hash]
