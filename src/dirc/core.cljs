@@ -262,7 +262,7 @@ https://github.com/chr15m/dirc/#self-hosted-install")
                  :value @buffer
                  :placeholder "..."
                  :on-change #(reset! buffer (-> % .-target .-value))}]
-        [:button {:type "submit" :id "send"} [:img.icon {:src "icons/comment.svg"}]]]])))
+        [:button {:type "submit" :id "send"} [component-icon "comment"]]]])))
 
 (defn component-messages [state]
   [(with-meta
