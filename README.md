@@ -1,4 +1,10 @@
-peer-to-peer IRC-inspired self-hosted web chat.
+p2p IRC-inspired self-hosted browser web chat.
+
+ * Identities are key pairs (NaCl).
+ * Messaging over WebRTC using [Bugout](https://github.com/chr15m/bugout).
+ * Trust minimised architecture.
+
+Built on [WebTorrent](https://webtorrent.io/).
 
 ### Self-hosted install
 
@@ -15,11 +21,11 @@ For better performance behind restrictive firewalls you may wish to specify your
 
 ### Limitations
 
- * Peer discovery uses [webtorrent](https://webtorrent.io/) wss trackers - essentially a centralized service.
+ * WebTorrent peer discovery uses wss trackers - which are essentially a centralized service.
  * No security audit has been done on this codebase.
  * Web browsers are notoriously leaky.
  * WebRTC has been known to leak around Tor.
- * Eavesdropping on a channel without revealing listener is easy.
+ * Eavesdropping on a channel without revealing the listener is easy.
 
 In short, this is an experiment, please don't rely on it for high security communication.
 
