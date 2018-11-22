@@ -146,6 +146,25 @@ https://github.com/chr15m/dirc/#self-hosted-install")
 (defn get-channel-bugout [state channel-hash]
   (-> state :channels (get channel-hash) :bugout))
 
+(defn send-message [state channel-hash kind & [content to-address]]
+  (let [b (get-channel-bugout @state channel-hash)
+        packet (clj->js (merge {:k kind
+                                :n (to-hex (random-bytes 16))}
+                               content))]
+    (if (> (-> @state :channels (get channel-hash) :connections) 0)
+      (do
+        (if to-address
+          (.send b to-address packet)
+          (.send b packet))
+        state))))
+
+(defn send-profile [state channel-hash & [to-address]]
+  (send-message state channel-hash :profile {:p (@state :profile)} to-address))
+
+(defn send-profile-update [state]
+  (doseq [[channel-hash channel] (@state :channels)]
+    (send-profile state channel-hash)))
+
 (defn append-message [state channel-hash message]
   (update-in state [:channels channel-hash :messages] conj message))
 
@@ -153,26 +172,15 @@ https://github.com/chr15m/dirc/#self-hosted-install")
   (debug "message" address message)
   (let [m (js->clj message :keywordize-keys true)]
     (case (m :k)
+      "hello" (send-profile state channel-hash address)
       "message" (swap! state append-message channel-hash (merge m {:pk address :t (now)}))
-      "profile" (swap! state assoc-in [:users address] (m :p)))))
+      "profile" (swap! state assoc-in [:users address] (m :p))
+      (js/console.error "unknown message kind:" (clj->js m)))))
 
 (defn network-event-user-state-update [state channel-hash op msg address]
   (swap! state #(-> %
                     (update-in [:channels channel-hash :users] op address)
                     (append-message channel-hash {:m msg :n (to-hex (random-bytes 16)) :pk address :t (now)}))))
-
-(defn send-message [state channel-hash kind content]
-  (if (> (-> @state :channels (get channel-hash) :connections) 0)
-    (do
-      (.send (get-channel-bugout @state channel-hash)
-             (clj->js (merge {:k kind
-                              :n (to-hex (random-bytes 16))}
-                             content)))
-      state)))
-
-(defn send-profile-update [state]
-  (doseq [[channel-hash channel] (@state :channels)]
-    (send-message state channel-hash :profile {:p (@state :profile)})))
 
 (defn join-channel [state channel-name]
   (let [channel-hash (.substr (to-hex (hash-object {:channel channel-name})) 0 16)]
@@ -183,7 +191,7 @@ https://github.com/chr15m/dirc/#self-hosted-install")
                           (assoc-in [:ui :selected] channel-hash)))
         ; hook up the Bugout events
         (debug "bugout address" (.address bugout))
-        (ocall! bugout "on" "seen" #((network-event-user-state-update state channel-hash conj "joined" %) (send-profile-update state)))
+        (ocall! bugout "on" "seen" #((network-event-user-state-update state channel-hash conj "joined" %) (send-profile-update state) (send-message state channel-hash :hello {} %)))
         (ocall! bugout "on" "left" (partial #'network-event-user-state-update state channel-hash disj "left"))
         (ocall! bugout "on" "message" (partial #'network-event-receive-message state channel-hash))
         (ocall! bugout "on" "connections" #(swap! state assoc-in [:channels channel-hash :connections] %))
