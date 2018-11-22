@@ -9,7 +9,7 @@ public/icons/%.svg:
 	rm -rf public/icons/$(COLOR)
 
 public/fonts/fonts.css: ./node_modules/.bin/goofoffline
-	cd public && goofoffline "http://fonts.googleapis.com/css?family=Cutive+Mono"
+	cd public && ./node_modules/.bin/goofoffline "http://fonts.googleapis.com/css?family=Cutive+Mono"
 
 ./node_modules/.bin/goofoffline:
 	npm install google-fonts-offline
