@@ -286,29 +286,36 @@ https://github.com/chr15m/dirc/#self-hosted-install")
 (defn home-page [state]
   (if @state
     [:div#wrapper
-     [:div#channel-info
-      (apply + (map (fn [[channel-hash channel]] (-> channel :wires count)) (@state :channels)))
-      " wires"]
      [:div#message-area
-      [:div#channels
-       [:span.tab {:key "log"
-                   :class (when (is-selected-channel? @state "log") "selected")
-                   :on-click (partial select-channel state "log")}
-        "log"]
-       (doall (for [[h c] (@state :channels)]
-                [:span.tab {:key (str h)
-                            :class (when (is-selected-channel? @state h) "selected")
-                            :on-click (partial select-channel state h)}
-
-                 [:span {:on-click (partial leave-channel state h)}
-                  [component-icon :times-circle]]
-                 (if (= (count (c :users)) 0)
-                   ".."
-                   (c :connections))
-                 " "
-                 (c :name)]))]
       [component-messages state]
-      [component-input-box state]]]
+      [component-input-box state]]
+     (when (@state :burger)
+       [:div#channel-info
+        (apply + (map (fn [[channel-hash channel]] (channel :connections)) (@state :channels)))
+        " wires"
+        [:hr]
+        [:div#channels
+         [:div.tab {:key "log"
+                    :class (when (is-selected-channel? @state "log") "selected")
+                    :on-click (partial select-channel state "log")}
+          [:span "-"]
+          [:span.name "log"]]
+         (doall (for [[h c] (@state :channels)]
+                  [:div.tab {:key (str h)
+                             :class (when (is-selected-channel? @state h) "selected")
+                             :on-click (partial select-channel state h)}
+                   [:span {:on-click (partial leave-channel state h)}
+                    [component-icon :times-circle]]
+                   [:span.connections
+                    (if (= (count (c :users)) 0)
+                      ".."
+                      (c :connections))]
+                   " "
+                   [:span.name (c :name)]]))]
+        [:hr]
+        [:div#users]])
+     [:button#burger {:on-click #(swap! state update-in [:burger] not)}
+      [component-icon "bars"]]]
     [:div#fin "fin."]))
 
 ;; -------------------------

@@ -55,13 +55,61 @@ img.icon {
   max-height: 100vh;
 }
 
+#burger {
+  position: fixed;
+  right: 1em;
+  border: 0px;
+  top: 1em;
+  background-color: transparent;
+  outline-style: none;
+}
+
 #channel-info {
   position: fixed;
   padding: 0.5em;
+  padding-top: 2em;
+  max-width: 100%;
+  width: 320px;
   top: 0px;
   right: 0px;
   border: 1px solid #555;
   background-color: #333;
+  min-height: 100vh;
+}
+
+#channel-info * {
+  background-color: transparent;
+}
+
+#channels {
+  margin-top: 0.5em;
+}
+
+#channels .tab {
+  padding: 0.2em;
+  margin: 0.1em;
+  cursor: pointer;
+}
+
+#channels .tab .name {
+  position: absolute;
+  left: 4.5em;
+}
+
+#channels .tab.selected {
+  background-color: #666 !important;
+}
+
+#channels .tab .connections {
+  position: absolute;
+}
+
+#channels .tab .icon {
+  width: 32px;
+  margin-right: 10px;
+}
+
+#channels .tab:hover .icon {
 }
 
 #buttons {
@@ -76,45 +124,22 @@ img.icon {
 #message-area {
   display: flex;
   flex-direction: column;
+  min-height: 100vh;
+  margin-bottom: 1px;
 }
 
 #messages {
   flex: 1;
   padding: 0em 0.5em;
-  margin: 2.5em 0em;
+  margin: 0.25em 0em;
   height: 100%;
   overflow: auto;
 }
 
-#channels {
-  width: 100%;
-  position: fixed;
-  top: 0px;
-}
-
-#channels .tab {
-  width: 10em;
-  display: inline-block;
-  border-bottom: 1px solid #555;
-  border-right: 1px solid #555;
-  border-radius: 2px;
-  padding: 0.25em 0.5em;;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  cursor: pointer;
-  line-height: 1.5em;
-}
-
-#channels .tab.selected {
-  background-color: #333;
-}
-
-#channels .tab .icon {
-  float: right;
-}
-
 #messages .time, .who, .message {
   margin-right: 0.25em;
+  white-space: pre-wrap;
+  word-wrap: break-word;
 }
 
 #messages .who {
@@ -124,6 +149,11 @@ img.icon {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+#messages > div {
+  white-space: pre-wrap;
+  word-wrap: break-word;
 }
 
 #messages > div > * {
