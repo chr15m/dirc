@@ -313,7 +313,11 @@ https://github.com/chr15m/dirc/#self-hosted-install")
                    " "
                    [:span.name (c :name)]]))]
         [:hr]
-        [:div#users]])
+        [:div#users
+         (doall (for [u (get-in @state [:channels (get-selected-channel @state) :users])]
+                  [:div
+                   [:span.handle (-> @state :users (get u) :handle)]
+                   [:span.id u]]))]])
      [:button#burger {:on-click #(swap! state update-in [:burger] not)}
       [component-icon "bars"]]]
     [:div#fin "fin."]))

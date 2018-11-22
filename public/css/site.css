@@ -112,6 +112,15 @@ img.icon {
 #channels .tab:hover .icon {
 }
 
+#users > div > span {
+  display: inline-block;
+  width: 50%;
+  max-width: 50%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 #buttons {
   text-align: right;
   background-color: #333;
