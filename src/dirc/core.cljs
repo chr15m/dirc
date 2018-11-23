@@ -199,9 +199,7 @@ https://github.com/chr15m/dirc/#self-hosted-install")
         @state))))
 
 (defn leave-channel [state channel-hash]
-  ; destroy the bugout instance
-  (.destroy (get-channel-bugout @state channel-hash) (partial debug "Bugout instance destroyed."))
-  (swap! state update-in [:channels] dissoc channel-hash))
+  (ocall! (get-channel-bugout @state channel-hash) "destroy" (partial debug "Bugout instance destroyed."))  (swap! state update-in [:channels] dissoc channel-hash))
 
 (defn add-log-message [state c & message-parts]
   (swap! state update-in [:log] conj
