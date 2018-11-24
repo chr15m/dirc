@@ -187,8 +187,10 @@ https://github.com/chr15m/dirc/#self-hosted-install")
     (when (not (get-in @state [:channels channel-hash]))
       (let [bugout (Bugout. (str "dir-channel-" channel-name) #js {:wt (@state :wt) :seed (ocall! Bugout "encodeseed" (@state :seed)) :timeout 60000})]
         (debug "join-channel" channel-name channel-hash)
-        (swap! state #(-> % (assoc-in [:channels channel-hash] {:connections nil :name channel-name :bugout bugout :users #{}})
-                          (assoc-in [:ui :selected] channel-hash)))
+        (swap! state
+               #(-> %
+                    (assoc-in [:channels channel-hash] {:connections nil :name channel-name :bugout bugout :users #{}})
+                    (assoc-in [:ui :selected] channel-hash)))
         ; hook up the Bugout events
         (debug "bugout address" (.address bugout))
         (ocall! bugout "on" "seen" #((network-event-user-state-update state channel-hash conj "joined" %) (send-profile-update state) (send-message state channel-hash :hello {} %)))
