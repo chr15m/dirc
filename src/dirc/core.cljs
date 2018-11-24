@@ -199,7 +199,11 @@ https://github.com/chr15m/dirc/#self-hosted-install")
         @state))))
 
 (defn leave-channel [state channel-hash]
-  (ocall! (get-channel-bugout @state channel-hash) "destroy" (partial debug "Bugout instance destroyed."))  (swap! state update-in [:channels] dissoc channel-hash))
+  (ocall! (get-channel-bugout @state channel-hash) "destroy" (partial debug "Bugout instance destroyed."))
+  (swap! state
+         #(-> %
+              (update-in [:channels] dissoc channel-hash)
+              (update-in [:ui :selected] (fn [selected] (if (= selected channel-hash) "log" selected))))))
 
 (defn add-log-message [state c & message-parts]
   (swap! state update-in [:log] conj
@@ -308,16 +312,16 @@ https://github.com/chr15m/dirc/#self-hosted-install")
           [:span.name "log"]]
          (doall (for [[h c] (@state :channels)]
                   [:div.tab {:key (str h)
-                             :class (when (is-selected-channel? @state h) "selected")
-                             :on-click (partial select-channel state h)}
+                             :class (when (is-selected-channel? @state h) "selected")}
                    [:span {:on-click (partial leave-channel state h)}
                     [component-icon :times-circle]]
-                   [:span.connections
-                    (if (= (count (c :users)) 0)
-                      ".."
-                      (c :connections))]
-                   " "
-                   [:span.name (c :name)]]))]
+                   [:span {:on-click (partial select-channel state h)}
+                    [:span.connections
+                     (if (= (count (c :users)) 0)
+                       ".."
+                       (c :connections))]
+                    " "
+                    [:span.name (c :name)]]]))]
         [:hr]
         [:div#users
          (doall (for [u (get-in @state [:channels (get-selected-channel @state) :users])]
