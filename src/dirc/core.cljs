@@ -127,7 +127,7 @@ https://github.com/chr15m/dirc/#self-hosted-install")
 
 (defn extract-account [a]
   {:seed (aget a "seed")
-   :profile (js->clj (aget a "profile") :keywordize-keys)})
+   :profile (js->clj (aget a "profile") :keywordize-keys true)})
 
 (defn load-account []
   (let [account-js (storage-load "dirc")
@@ -139,27 +139,32 @@ https://github.com/chr15m/dirc/#self-hosted-install")
 
 (defn save-account [state]
   (storage-save "dirc" {:seed (state :seed)
-                        :profile (state :profile)}))
+                        :profile (-> state :users (get (state :address)))}))
 
 ;; Network
+
+(defn get-profile [state]
+  (-> @state :users (get (@state :address))))
 
 (defn get-channel-bugout [state channel-hash]
   (-> state :channels (get channel-hash) :bugout))
 
+(defn make-message [kind content]
+  (clj->js
+    (merge {:k kind
+            :n (to-hex (random-bytes 16))}
+           content)))
+
 (defn send-message [state channel-hash kind & [content to-address]]
   (let [b (get-channel-bugout @state channel-hash)
-        packet (clj->js (merge {:k kind
-                                :n (to-hex (random-bytes 16))}
-                               content))]
-    (if (> (-> @state :channels (get channel-hash) :connections) 0)
-      (do
-        (if to-address
-          (.send b to-address packet)
-          (.send b packet))
-        state))))
+        packet (make-message kind content)]
+    (if to-address
+      (.send b to-address packet)
+      (.send b packet))
+    state))
 
 (defn send-profile [state channel-hash & [to-address]]
-  (send-message state channel-hash :profile {:p (@state :profile)} to-address))
+  (send-message state channel-hash :profile {:p (get-profile state)} to-address))
 
 (defn send-profile-update [state]
   (doseq [[channel-hash channel] (@state :channels)]
@@ -168,19 +173,37 @@ https://github.com/chr15m/dirc/#self-hosted-install")
 (defn append-message [state channel-hash message]
   (update-in state [:channels channel-hash :messages] conj message))
 
-(defn network-event-receive-message [state channel-hash address message packet]
+(defn network-event-receive-message [state channel-hash address message & [packet]]
   (debug "message" address message)
   (let [m (js->clj message :keywordize-keys true)]
     (case (m :k)
       "hello" (send-profile state channel-hash address)
       "message" (swap! state append-message channel-hash (merge m {:pk address :t (now)}))
       "profile" (swap! state assoc-in [:users address] (m :p))
-      (js/console.error "unknown message kind:" (clj->js m)))))
+      (do (js/console.error "unknown message kind:" (clj->js m)) false))))
+
+(defn send-message-if-connected [state channel-hash kind & [content to-address]]
+  (when (> (-> @state :channels (get channel-hash) :connections) 0)
+    (send-message state channel-hash kind content to-address)))
 
 (defn network-event-user-state-update [state channel-hash op msg address]
   (swap! state #(-> %
                     (update-in [:channels channel-hash :users] op address)
                     (append-message channel-hash {:m msg :n (to-hex (random-bytes 16)) :pk address :t (now)}))))
+
+(defn network-event-join [state channel-hash address]
+  (network-event-user-state-update state channel-hash conj "joined" address)
+  (send-profile-update state)
+  (send-message-if-connected state channel-hash :hello {} address))
+
+(defn get-selected-channel [state]
+  (get-in state [:ui :selected]))
+
+(defn is-selected-channel? [state channel-hash]
+  (= (get-selected-channel state) channel-hash))
+
+;; -------------------------
+;; Actions
 
 (defn join-channel [state channel-name]
   (let [channel-hash (.substr (to-hex (hash-object {:channel channel-name})) 0 16)]
@@ -193,11 +216,12 @@ https://github.com/chr15m/dirc/#self-hosted-install")
                     (assoc-in [:ui :selected] channel-hash)))
         ; hook up the Bugout events
         (debug "bugout address" (.address bugout))
-        (ocall! bugout "on" "seen" #((network-event-user-state-update state channel-hash conj "joined" %) (send-profile-update state) (send-message state channel-hash :hello {} %)))
+        (ocall! bugout "on" "seen" (partial #'network-event-join state channel-hash))
         (ocall! bugout "on" "left" (partial #'network-event-user-state-update state channel-hash disj "left"))
         (ocall! bugout "on" "message" (partial #'network-event-receive-message state channel-hash))
         (ocall! bugout "on" "connections" #(swap! state assoc-in [:channels channel-hash :connections] %))
         (ocall! bugout "heartbeat")
+        (network-event-user-state-update state channel-hash conj "joined" (.address bugout))
         @state))))
 
 (defn leave-channel [state channel-hash]
@@ -214,22 +238,24 @@ https://github.com/chr15m/dirc/#self-hosted-install")
           :t (now)}))
 
 (defn update-nick [state nick]
-  (swap! state assoc-in [:profile :handle] nick)
+  (swap! state assoc-in [:users (@state :address) :handle] nick)
   (send-profile-update state)
   @state)
 
-;; -------------------------
-;; UI Fns & Event handlers
+(defn send-chat-message [state buffer]
+  (let [channel-hash (get-selected-channel @state)
+        kind :message
+        message {:m @buffer :c channel-hash}
+        sent (send-message-if-connected state channel-hash kind message)]
+    ; send to self if not to others
+    (or sent (network-event-receive-message state channel-hash (@state :address) (make-message kind message)))))
 
 (defn select-channel [state channel-hash & [ev]]
   (swap! state assoc-in [:ui :selected] channel-hash)
   (.focus (js/document.getElementById "chatbox")))
 
-(defn get-selected-channel [state]
-  (get-in state [:ui :selected]))
-
-(defn is-selected-channel? [state channel-hash]
-  (= (get-selected-channel state) channel-hash))
+;; -------------------------
+;; UI Fns & Event handlers
 
 (defn handle-submit [state buffer ev]
   (.preventDefault ev)
@@ -242,7 +268,7 @@ https://github.com/chr15m/dirc/#self-hosted-install")
                            (= first-word "/logout") (do (storage-remove "dirc") (reset! state nil))
                            (= (first first-word) "/") (do (add-log-message state :error "No such command: " @buffer) false)
                            (and (> (count @buffer) 0)
-                                (not (is-selected-channel? @state "log"))) (let [channel-hash (get-selected-channel @state)] (send-message state channel-hash :message {:m @buffer :c channel-hash}))
+                                (not (is-selected-channel? @state "log"))) (send-chat-message state buffer)
                            :else false)]
     (when action-taken
       (reset! buffer ""))))
@@ -285,14 +311,12 @@ https://github.com/chr15m/dirc/#self-hosted-install")
                    [:div {:key (m :t) :class (m :c)}
                     [:span.time {:title (get-date (m :t))} (get-time (m :t))]
                     [:pre.message (m :m)]]))
-          (if (> (count (get-in @state [:channels (get-selected-channel @state) :users])) 0)
-            (doall (for [m (reverse (get-in @state [:channels (get-selected-channel @state) :messages]))]
-                     (when (m :m)
-                       [:div {:key (str (m :t) (m :pk) (m :n))}
-                        [:span.time {:title (get-date (m :t))} (get-time (m :t))]
-                        [:span.who {:title (m :pk)} (or (get-in @state [:users (m :pk) :handle]) "?")]
-                        [:pre.message (m :m)]])))
-            [:div.waiting "Waiting for other participants" [:span.dot-1 "."] [:span.dot-2 "."] [:span.dot-3 "."]]))])
+          (doall (for [m (reverse (get-in @state [:channels (get-selected-channel @state) :messages]))]
+                   (when (m :m)
+                     [:div {:key (str (m :t) (m :pk) (m :n))}
+                      [:span.time {:title (get-date (m :t))} (get-time (m :t))]
+                      [:span.who {:title (m :pk)} (or (get-in @state [:users (m :pk) :handle]) "?")]
+                      [:pre.message (m :m)]]))))])
      {:component-will-update check-and-scroll-to-bottom})])
 
 (defn home-page [state]
@@ -327,7 +351,7 @@ https://github.com/chr15m/dirc/#self-hosted-install")
         [:hr]
         [:div#users
          (doall (for [u (get-in @state [:channels (get-selected-channel @state) :users])]
-                  [:div
+                  [:div {:key u}
                    [:span.handle (-> @state :users (get u) :handle)]
                    [:span.id u]]))]])
      [:button#burger {:on-click #(swap! state update-in [:burger] not)}
@@ -339,14 +363,16 @@ https://github.com/chr15m/dirc/#self-hosted-install")
 
 (defonce state
   (let [saved-state (load-account)
-        seed (saved-state :seed)]
+        seed (saved-state :seed)
+        keypair (keypair-from-seed seed)
+        address (Bugout.address (aget keypair "publicKey"))]
     (r/atom
       {:wt (WebTorrent. (storage-load "dirc-wt-config"))
        :b []
        :seed seed
-       :profile (saved-state :profile)
        :keypair (keypair-from-seed seed)
-       :users {}
+       :address address
+       :users {address (saved-state :profile)}
        :ui {:selected "log"}
        :log ()})))
 
