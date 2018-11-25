@@ -239,6 +239,7 @@ https://github.com/chr15m/dirc/#self-hosted-install")
 
 (defn update-nick [state nick]
   (swap! state assoc-in [:users (@state :address) :handle] nick)
+  (save-account @state)
   (send-profile-update state)
   @state)
 
