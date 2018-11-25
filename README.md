@@ -1,4 +1,6 @@
-p2p IRC-inspired self-hosted browser web chat.
+p2p IRC-inspired self-hosted web chat.
+
+![Screen cast of the web app](./screencast.gif)
 
  * Identities are key pairs (NaCl).
  * Messaging over WebRTC using [Bugout](https://github.com/chr15m/bugout).
