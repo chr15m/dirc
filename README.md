@@ -1,4 +1,4 @@
-p2p IRC-inspired self-hosted web chat.
+p2p IRC-inspired self-hosted web chat. **[Try it](https://chr15m.github.io/dirc)**.
 
 ![Screen cast of the web app](./screencast.gif)
 
