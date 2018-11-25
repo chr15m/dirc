@@ -60,7 +60,7 @@
                          ;:source-map "build/js/app.js.map"
                          :npm-deps {"bencode-js" "0.0.8"
                                     "webtorrent" "0.100.0"
-                                    "bugout" "0.0.6"}
+                                    "bugout" "0.0.8"}
                          :foreign-libs [{:file "node_modules/bugout/docs/bugout.min.js"
                                          :provides ["cljsjs.bugout"]
                                          :global-exports {cljsjs.bugout Bugout}}

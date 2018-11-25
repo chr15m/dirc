@@ -365,7 +365,7 @@ https://github.com/chr15m/dirc/#self-hosted-install")
   (let [saved-state (load-account)
         seed (saved-state :seed)
         keypair (keypair-from-seed seed)
-        address (Bugout.address (aget keypair "publicKey"))]
+        address (ocall! Bugout "address" (aget keypair "publicKey"))]
     (r/atom
       {:wt (WebTorrent. (storage-load "dirc-wt-config"))
        :b []
