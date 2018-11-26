@@ -10,8 +10,15 @@ Built on [WebTorrent](https://webtorrent.io/).
 
 ### Self-hosted install
 
- 1. Download a release.
+Since dirc is an entirely client-side web app with no server component, self-hosting just means hosting the static html, js, and css.
+
+ 1. [Download a release](https://github.com/chr15m/dirc/releases/latest).
  2. Upload it to your static web host.
+
+The web app runs in the browser and independent instances speak to eachother using WebRTC. Regardless of where the static app files are hosted, all instances on all domains can reach each other and join the same chat room. The main reasons to self-host are:
+
+ * You can be sure of the integrity of the client code: nobody can tamper with the app code if the files are stored on your own server.
+ * Because of the way the web works, whoever owns the domain the app is served from can read your client side keys. Self-hosting eliminates this possibility.
 
 ### Configure STUN/TURN servers
 
