@@ -5,13 +5,10 @@
     [cljsjs.webtorrent :as WebTorrent]
     ["bencode-js/lib/index" :as bencode]
     [cljsjs.nacl-fast :as nacl]
-    [oops.core :refer [oget ocall! oset!]]))
+    [oops.core :refer [ocall!]]))
 
 ;; -------------------------
 ;; Constants
-
-(defonce utf8encoder (js/TextEncoder. "utf8"))
-(defonce utf8decoder (js/TextDecoder. "utf8"))
 
 (def help-message
 "/help
@@ -22,7 +19,11 @@
 
 https://github.com/chr15m/dirc/#self-hosted-install")
 
-; /seed [hex-encoded-seed] = get or set your keypair seed
+; TODO:
+; * command history
+; * button to turn URLs into inline content
+; * /seed [hex-encoded-seed] = get or set your keypair seed
+; * refactor out most of the crypto fns below into a lib - mostly unused
 
 ;; -------------------------
 ;; Functions
@@ -38,10 +39,14 @@ https://github.com/chr15m/dirc/#self-hosted-install")
 (defn from-hex [b]
   (js/Uint8Array. (map #(js/parseInt (apply str %) 16) (partition 2 b))))
 
+(defonce utf8encoder (js/TextEncoder. "utf8"))
+
 (defn string-to-uint8array [s]
   (if (= (type s) js/Uint8Array)
     s
     (ocall! utf8encoder "encode" s)))
+
+(defonce utf8decoder (js/TextDecoder. "utf8"))
 
 (defn uint8array-to-string [a]
   (if (= (type a) js/String)
