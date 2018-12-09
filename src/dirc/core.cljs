@@ -130,10 +130,16 @@ https://github.com/chr15m/dirc/#self-hosted-install")
   {:seed (random-bytes 32)
    :profile {:handle "anonymous"}})
 
+(defn restore-map-list [saved-vec]
+  (into {} (map (fn [[k v]] [(name k) (into '() (reverse v))]) saved-vec)))
+
+(defn restore-map [saved-vec]
+  (into {} (map (fn [[k v]] [(name k) v]) saved-vec)))
+
 (defn extract-account [a]
   {:seed (aget a "seed")
-   :profile (js->clj (aget a "profile") :keywordize-keys true)
-   :messages (js->clj (aget a "messages") :keywordize-keys true)})
+   :users (restore-map (js->clj (aget a "users") :keywordize-keys true))
+   :messages (restore-map-list (js->clj (aget a "messages") :keywordize-keys true))})
 
 (defn load-account []
   (let [account-js (storage-load "dirc")
@@ -145,13 +151,10 @@ https://github.com/chr15m/dirc/#self-hosted-install")
 
 (defn save-account [state]
   (let [saving {:seed (state :seed)
-                :profile (-> state :users (get (state :address)))
+                :users (-> state :users)
                 :messages (-> state :messages)}]
     (js/console.log "saving:" (clj->js saving))
     (storage-save "dirc" saving)))
-
-(defn restore-messages [saved-message-vec]
-  (into {} (map (fn [[k v]] [(name k) (into '() (reverse v))]) saved-message-vec)))
 
 ;; Network
 
@@ -398,8 +401,8 @@ https://github.com/chr15m/dirc/#self-hosted-install")
        :seed seed
        :keypair (keypair-from-seed seed)
        :address address
-       :users {address (saved-state :profile)}
-       :messages (restore-messages (saved-state :messages))
+       :users (saved-state :users)
+       :messages (saved-state :messages)
        :ui {:selected "log"}
        :log ()})))
 
