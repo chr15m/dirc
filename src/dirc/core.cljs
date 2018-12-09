@@ -171,7 +171,7 @@ https://github.com/chr15m/dirc/#self-hosted-install")
     (send-profile state channel-hash)))
 
 (defn append-message [state channel-hash message]
-  (update-in state [:channels channel-hash :messages] conj message))
+  (update-in state [:messages channel-hash] conj message))
 
 (defn network-event-receive-message [state channel-hash address message & [packet]]
   (debug "message" address message)
@@ -312,7 +312,7 @@ https://github.com/chr15m/dirc/#self-hosted-install")
                    [:div {:key (m :t) :class (m :c)}
                     [:span.time {:title (get-date (m :t))} (get-time (m :t))]
                     [:pre.message (m :m)]]))
-          (doall (for [m (reverse (get-in @state [:channels (get-selected-channel @state) :messages]))]
+          (doall (for [m (reverse (get-in @state [:messages (get-selected-channel @state)]))]
                    (when (m :m)
                      [:div {:key (str (m :t) (m :pk) (m :n))}
                       [:span.time {:title (get-date (m :t))} (get-time (m :t))]
