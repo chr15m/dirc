@@ -132,7 +132,8 @@ https://github.com/chr15m/dirc/#self-hosted-install")
 
 (defn extract-account [a]
   {:seed (aget a "seed")
-   :profile (js->clj (aget a "profile") :keywordize-keys true)})
+   :profile (js->clj (aget a "profile") :keywordize-keys true)
+   :messages (js->clj (aget a "messages") :keywordize-keys true)})
 
 (defn load-account []
   (let [account-js (storage-load "dirc")
@@ -143,8 +144,14 @@ https://github.com/chr15m/dirc/#self-hosted-install")
     account))
 
 (defn save-account [state]
-  (storage-save "dirc" {:seed (state :seed)
-                        :profile (-> state :users (get (state :address)))}))
+  (let [saving {:seed (state :seed)
+                :profile (-> state :users (get (state :address)))
+                :messages (-> state :messages)}]
+    (js/console.log "saving:" (clj->js saving))
+    (storage-save "dirc" saving)))
+
+(defn restore-messages [saved-message-vec]
+  (into {} (map (fn [[k v]] [(name k) (into '() (reverse v))]) saved-message-vec)))
 
 ;; Network
 
@@ -180,12 +187,14 @@ https://github.com/chr15m/dirc/#self-hosted-install")
 
 (defn network-event-receive-message [state channel-hash address message & [packet]]
   (debug "message" address message)
-  (let [m (js->clj message :keywordize-keys true)]
-    (case (m :k)
-      "hello" (send-profile state channel-hash address)
-      "message" (swap! state append-message channel-hash (merge m {:pk address :t (now)}))
-      "profile" (swap! state assoc-in [:users address] (m :p))
-      (do (js/console.error "unknown message kind:" (clj->js m)) false))))
+  (let [m (js->clj message :keywordize-keys true)
+        result (case (m :k)
+                 "hello" (send-profile state channel-hash address)
+                 "message" (swap! state append-message channel-hash (merge m {:pk address :t (now)}))
+                 "profile" (swap! state assoc-in [:users address] (m :p))
+                 (do (js/console.error "unknown message kind:" (clj->js m)) false))]
+    (save-account @state)
+    result))
 
 (defn send-message-if-connected [state channel-hash kind & [content to-address]]
   (when (> (-> @state :channels (get channel-hash) :connections) 0)
@@ -252,9 +261,11 @@ https://github.com/chr15m/dirc/#self-hosted-install")
   (let [channel-hash (get-selected-channel @state)
         kind :message
         message {:m @buffer :c channel-hash}
-        sent (send-message-if-connected state channel-hash kind message)]
-    ; send to self if not to others
-    (or sent (network-event-receive-message state channel-hash (@state :address) (make-message kind message)))))
+        sent (send-message-if-connected state channel-hash kind message)
+        ; send to self if not to others
+        result (or sent (network-event-receive-message state channel-hash (@state :address) (make-message kind message)))]
+    (save-account @state)
+    result))
 
 (defn select-channel [state channel-hash & [ev]]
   (swap! state assoc-in [:ui :selected] channel-hash)
@@ -388,6 +399,7 @@ https://github.com/chr15m/dirc/#self-hosted-install")
        :keypair (keypair-from-seed seed)
        :address address
        :users {address (saved-state :profile)}
+       :messages (restore-messages (saved-state :messages))
        :ui {:selected "log"}
        :log ()})))
 
