@@ -320,41 +320,50 @@ https://github.com/chr15m/dirc/#self-hosted-install")
                       [:pre.message (m :m)]]))))])
      {:component-will-update check-and-scroll-to-bottom})])
 
+(defn component-channel-list [state]
+  [:div#channels
+   [:div.tab {:key "log"
+              :class (when (is-selected-channel? @state "log") "selected")
+              :on-click (partial select-channel state "log")}
+    [:span "-"]
+    [:span.name "log"]]
+   (doall (for [[h c] (@state :channels)]
+            [:div.tab {:key (str h)
+                       :class (when (is-selected-channel? @state h) "selected")}
+             [:span {:on-click (partial leave-channel state h)}
+              [component-icon :times-circle]]
+             [:span {:on-click (partial select-channel state h)}
+              [:span.connections
+               (if (= (count (c :users)) 0)
+                 ".."
+                 (c :connections))]
+              " "
+              [:span.name (c :name)]]]))])
+
+(defn component-user-list [state]
+  [:div#users
+   (doall (for [u (get-in @state [:channels (get-selected-channel @state) :users])]
+            [:div {:key u}
+             [:span.handle (-> @state :users (get u) :handle)]
+             [:span.id u]]))])
+
+(defn component-burger-menu [state]
+  (when (@state :burger)
+    [:div#channel-info
+     (or (apply + (map (fn [[channel-hash channel]] (channel :connections)) (@state :channels))) 0)
+     " wires"
+     [:hr]
+     [component-channel-list state]
+     [:hr]
+     [component-user-list state]]))
+
 (defn home-page [state]
   (if @state
     [:div#wrapper
      [:div#message-area
       [component-messages state]
       [component-input-box state]]
-     (when (@state :burger)
-       [:div#channel-info
-        (apply + (map (fn [[channel-hash channel]] (channel :connections)) (@state :channels)))
-        " wires"
-        [:hr]
-        [:div#channels
-         [:div.tab {:key "log"
-                    :class (when (is-selected-channel? @state "log") "selected")
-                    :on-click (partial select-channel state "log")}
-          [:span "-"]
-          [:span.name "log"]]
-         (doall (for [[h c] (@state :channels)]
-                  [:div.tab {:key (str h)
-                             :class (when (is-selected-channel? @state h) "selected")}
-                   [:span {:on-click (partial leave-channel state h)}
-                    [component-icon :times-circle]]
-                   [:span {:on-click (partial select-channel state h)}
-                    [:span.connections
-                     (if (= (count (c :users)) 0)
-                       ".."
-                       (c :connections))]
-                    " "
-                    [:span.name (c :name)]]]))]
-        [:hr]
-        [:div#users
-         (doall (for [u (get-in @state [:channels (get-selected-channel @state) :users])]
-                  [:div {:key u}
-                   [:span.handle (-> @state :users (get u) :handle)]
-                   [:span.id u]]))]])
+     [component-burger-menu state]
      [:button#burger {:on-click #(swap! state update-in [:burger] not)}
       [component-icon "bars"]]]
     [:div#fin "fin."]))
