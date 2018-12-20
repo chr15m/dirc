@@ -1,12 +1,17 @@
 ICONS=comment times-circle circle-o-notch
 COLOR=\#b8b8b8
 
-fonts: public/fonts/fonts.css $(foreach i,$(ICONS),public/icons/$(i).svg)
+assets: public/fonts/fonts.css $(foreach i,$(ICONS),public/icons/$(i).svg) public/icons/favicon.png
 
 public/icons/%.svg: ./node_modules/.bin/font-awesome-svg-png
 	./node_modules/.bin/font-awesome-svg-png --svg --color "$(COLOR)" --dest public/icons --icons $(basename $(notdir $@))
 	mv public/icons/$(COLOR)/svg/$(basename $(notdir $@)).svg public/icons/
 	rm -rf public/icons/$(COLOR)
+
+public/icons/favicon.png: ./node_modules/.bin/font-awesome-svg-png
+	./node_modules/.bin/font-awesome-svg-png --png --color "#1BE3C6" --dest public/icons --icons comments-o --sizes=512
+	mv "public/icons/#1BE3C6/png/512/comments-o.png" public/icons/favicon.png
+	rm -rf "public/icons/#1BE3C6"
 
 public/fonts/fonts.css: ./node_modules/.bin/goofoffline
 	cd public && ../node_modules/.bin/goofoffline "http://fonts.googleapis.com/css?family=Cutive+Mono"
