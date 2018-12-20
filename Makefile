@@ -3,13 +3,13 @@ COLOR=\#b8b8b8
 
 fonts: public/fonts/fonts.css $(foreach i,$(ICONS),public/icons/$(i).svg)
 
-public/icons/%.svg:
+public/icons/%.svg: ./node_modules/.bin/font-awesome-svg-png
 	./node_modules/.bin/font-awesome-svg-png --svg --color "$(COLOR)" --dest public/icons --icons $(basename $(notdir $@))
 	mv public/icons/$(COLOR)/svg/$(basename $(notdir $@)).svg public/icons/
 	rm -rf public/icons/$(COLOR)
 
 public/fonts/fonts.css: ./node_modules/.bin/goofoffline
-	cd public && ./node_modules/.bin/goofoffline "http://fonts.googleapis.com/css?family=Cutive+Mono"
+	cd public && ../node_modules/.bin/goofoffline "http://fonts.googleapis.com/css?family=Cutive+Mono"
 
 ./node_modules/.bin/goofoffline:
 	npm install google-fonts-offline
@@ -34,4 +34,4 @@ build/js/app.js: src/**/** project.clj
 
 clean:
 	lein clean
-	rm -rf build public/fonts
+	rm -rf build public/fonts public/icons
