@@ -143,6 +143,7 @@ img.icon {
   margin: 0.25em 0em;
   height: 100%;
   overflow: auto;
+  padding-bottom: 2.5em;
 }
 
 #messages .time, .who, .message {
