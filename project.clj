@@ -37,7 +37,7 @@
                          :install-deps true
                          :npm-deps {"bencode-js" "0.0.8"
                                     "webtorrent" "0.100.0"
-                                    "bugout" "0.0.8"}
+                                    "bugout" "0.0.12"}
                          :foreign-libs [{:file "node_modules/bugout/docs/bugout.min.js"
                                          :provides ["cljsjs.bugout"]
                                          :global-exports {cljsjs.bugout Bugout}}
